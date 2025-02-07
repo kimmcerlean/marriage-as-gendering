@@ -1,0 +1,7 @@
+*.dta
+*.dat
+*.gz
+output/
+*.Rhistory
+*.stswp
+*.raw
