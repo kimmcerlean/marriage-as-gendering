@@ -1,6 +1,6 @@
 ********************************************************************************
 ********************************************************************************
-* Project: Relationship Growth Curves
+* Project: Marriage as a Gendering Institution
 * Owner: Kimberly McErlean
 * Started: September 2024
 * File: couple_sample_recodes
