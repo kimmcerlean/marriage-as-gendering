@@ -11,6 +11,8 @@
 * Description
 ********************************************************************************
 * This files actually conducts the analysis
+* Another option - do what I did for divorce and use the family matrix instead?
+* To ensure I have right cohabitation?
 
 ********************************************************************************
 * Import data and small final sample cleanup
@@ -148,6 +150,10 @@ keep if transition_flag==1 | always_cohab==1 // so keeping a "control" group - b
 
 browse unique_id partner_id survey_yr transition_flag always_cohab rel_start_yr year_transitioned relationship_duration marital_status_updated
 
+gen treated=.
+replace treated=1 if ever_transition==1
+replace treated=0 if always_cohab==1
+
 gen duration_cohab=.
 replace duration_cohab = survey_yr - year_transitioned if transition_flag==1
 replace duration_cohab = relationship_duration if always_cohab==1
@@ -159,7 +165,10 @@ tab duration_cohab, m
 recode duration_cohab(-24/-11=-5)(-10/-7=-4)(-6/-5=-3)(-4/-3=-2)(-2/-1=-1)(0=0)(1/2=1)(3/4=2)(5/6=3)(7/8=4)(9/10=5)(11/12=6)(13/20=7)(21/30=8), gen(dur) // smoothing (bc the switch to every other year makes this wonky)
 
 ********************************************************************************
-**# Some descriptive statistics - have NOT revisited this
+**# Some descriptive statistics
+* # have NOT really revisited this and need to automate:
+* # need to pull first PRE match to show differences in characteristics
+* # then, post match to show balance
 ********************************************************************************
 browse unique_id survey_yr year_transitioned rel_start_yr // some people could have two relationships? so uniques needs to be combo of id and relation year?! oh but the cohab / marriage are off, so actually do transition year?
 unique unique_id
@@ -167,36 +176,39 @@ unique unique_id year_transitioned
 unique unique_id rel_start_yr
 unique unique_id if dur==0
 
+unique unique_id partner_id, by(treated)
+
 sum duration_cohab if dur < 0 // average cohab duration
 sum duration_cohab if dur > 0 & dur !=. // average marital duration
 
-tab couple_educ_gp
-tab couple_educ_gp if dur==0
+tab treated couple_educ_gp, row // so, very unbalanced
+tab treated educ_type, row // so, very unbalanced
+tab treated educ_type if relationship_duration==0, row
 
-tab children
-tab children if dur==0
+tab raceth_head_fixed treated, col
+
+tabstat AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner, by(treated)
+
+tab treated children, row
+tab treated children if relationship_duration==0, row m 
 
 tab had_birth
 unique unique_id if had_birth==1 // use this for % experiencing a birth
 unique unique_id if had_birth==1 & dur==0
 tab had_birth if dur==0
 
-sum female_earn_pct
-tab hh_earn_type
-sum female_hours_pct
-sum wife_housework_pct
-tab housework_bkt
-tab earn_housework
+tabstat female_earn_pct_t1 female_earn_pct_t female_hours_pct_t1 female_hours_pct_t wife_housework_pct_t1 wife_housework_pct_t, by(treated)
+// interestingly, these actually don't really differ across groups. I'd expect to see a difference? with treated being more traditional?
+tabstat female_earn_pct_t1 female_earn_pct_t female_hours_pct_t1 female_hours_pct_t wife_housework_pct_t1 wife_housework_pct_t if relationship_duration==0, by(treated)
+tabstat female_earn_pct_t1 female_earn_pct_t female_hours_pct_t1 female_hours_pct_t wife_housework_pct_t1 wife_housework_pct_t if dur==5, by(treated) // okay, so yes, the differences appear at later durs
 
-sum female_earn_pct if dur==0
-tab hh_earn_type if dur==0
-sum female_hours_pct if dur==0
-sum wife_housework_pct if dur==0
-tab housework_bkt if dur==0
-tab earn_housework if dur==0
+tab hh_earn_type_t1 treated, col
+tab housework_bkt_t treated, col
+tab earn_housework_t treated, col
+
 
 ********************************************************************************
-**# ANALYSIS (finally lol)
+**# DESCRIPTIVE ANALYSIS
 ********************************************************************************
 // descriptive
 
@@ -288,3 +300,36 @@ tab dur hh_earn_type, row nofreq
 tab dur housework_bkt, row nofreq
 tab dur earn_housework, row nofreq
 // tab dur hours_housework, row nofreq
+
+
+********************************************************************************
+**# Preliminary PSM (this is very crude)
+********************************************************************************
+// prob want to use characteristics at relationship start, which is relationship_duration==0 for both
+bysort unique_id partner_id: egen min_dur = min(relationship_duration)
+tab min_dur, m // 90% observed in first year
+
+logit treated i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
+predict psm if relationship_duration==min_dur
+
+// alt estimator
+pscore treated educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur, pscore(psm_alt) logit 
+
+bysort unique_id partner_id: egen pscore = max(psm)
+sort unique_id partner_id survey_yr
+browse unique_id partner_id relationship_duration psm pscore min_dur educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr
+
+// check for overlap
+tabstat psm, by(treated)
+sum psm if treated==0, det
+sum psm if treated==1, det
+tabstat pscore, by(treated)
+
+twoway (histogram psm if treated==1, width(.02) color(blue%30)) (histogram psm if treated==0, width(.02) color(red%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6))
+
+browse treated psm educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==0
+
+// for now, estimate female_earn_pct_t female_hours_pct_t year_transitioned?? BUT how do I get the control group? do I need to do this by duration?
+tabstat female_hours_pct_t, by(treated)
+
+teffects psmatch (re78) (treat age agesq agecube educ edusq marr nodegree black hisp re74 re75 u74 u75 interaction1, logit), atet gen(pstub_cps) nn(5) // atet = aTT caliper(0.1)

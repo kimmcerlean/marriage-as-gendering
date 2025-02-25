@@ -961,6 +961,10 @@ browse unique_id survey_yr SEX NUM_CHILDREN_ AGE_YOUNG_CHILD_  had_birth had_fir
 
 // also use FIRST_BIRTH_YR to say whether pre / post marital
 
+// create binary home ownership variable
+gen home_owner=0
+replace home_owner=1 if HOUSE_STATUS_==1
+
 // some age things
 gen year_birth = survey_yr - AGE_INDV
 // browse unique_id survey_yr SEX year_birth  AGE_INDV AGE_HEAD_ AGE_WIFE_
