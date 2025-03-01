@@ -92,8 +92,9 @@ tab survey_yr marital_status_updated
 tab rel_start_yr marital_status_updated, m
 
 unique unique_id, by(marital_status_updated) 
-unique unique_id if rel_start_yr >= 1990, by(marital_status_updated) // nearly half of sample goes away. okay let's decide later...
-keep if rel_start_yr >= 1990 // cohabitation not even reliably measured until mid-1980s
+unique unique_id if rel_start_yr >= 1990, by(marital_status_updated) // nearly half of sample goes away. o
+unique unique_id if rel_start_yr >= 1985, by(marital_status_updated)
+keep if rel_start_yr >= 1985 // cohabitation not even reliably measured until mid-1980s
 
 // restrict to working age?
 tab AGE_HEAD_ employed_head, row
@@ -163,6 +164,11 @@ browse unique_id partner_id survey_yr transition_flag always_cohab rel_start_yr 
 tab duration_cohab, m
 
 recode duration_cohab(-24/-11=-5)(-10/-7=-4)(-6/-5=-3)(-4/-3=-2)(-2/-1=-1)(0=0)(1/2=1)(3/4=2)(5/6=3)(7/8=4)(9/10=5)(11/12=6)(13/20=7)(21/30=8), gen(dur) // smoothing (bc the switch to every other year makes this wonky)
+
+unique unique_id, by(treated)
+tab years_observed treated, m col
+unique unique_id if treated==0, by(years_observed) // like if I want to use 4 years even, there are only 186 control uniques...oh duh, kim, you sum all of them 4+ DUH because this is constant
+unique unique_id if treated==1, by(years_observed) // 190 treated at 4 years. so, is this actually even going to work on is this too small of a group
 
 ********************************************************************************
 **# Some descriptive statistics
@@ -254,7 +260,6 @@ twoway (line female_hours_pct_t dur if dur>=-4 & dur <=6) (line wife_housework_p
 
 restore
 
-
 /// stopped here for now for 2/7/25 - nothing below here updated
 
 ** split by presence of children
@@ -333,3 +338,92 @@ browse treated psm educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fix
 tabstat female_hours_pct_t, by(treated)
 
 teffects psmatch (re78) (treat age agesq agecube educ edusq marr nodegree black hisp re74 re75 u74 u75 interaction1, logit), atet gen(pstub_cps) nn(5) // atet = aTT caliper(0.1)
+
+********************************************************************************
+**# Option: keep groups of same length and recenter control, then weight?!
+********************************************************************************
+gen keep_flag=0
+replace keep_flag = 1 if treated==1 & dur >=-2 & dur<=4 & years_observed>=4
+replace keep_flag = 1 if treated==0 & dur>=0 & dur<=6 & years_observed>=4
+
+unique unique_id if keep_flag==1, by(treated)
+tab dur treated if keep_flag==1
+
+gen recenter_dur = dur if treated==1
+replace recenter_dur = dur - 2 if treated==0
+
+tab recenter_dur treated if keep_flag==1, m
+
+gen recenter_dur_pos = recenter_dur+3
+
+gen ipw=.
+replace ipw=1/pscore if treated==1
+replace ipw=1/(1-pscore) if treated==0
+
+browse unique_id partner_id treated recenter_dur pscore ipw psm female_earn_pct_t female_hours_pct_t wife_housework_pct_t if keep_flag==1
+
+tabstat pscore ipw, by(treated)
+
+keep if keep_flag==1
+
+gen earn_weight_treat = 0
+replace earn_weight_treat = female_earn_pct_t*ipw if treated==1
+gen earn_weight_control = 0
+replace earn_weight_control = female_earn_pct_t*ipw if treated==0
+
+tabstat earn_weight_treat earn_weight_control if keep_flag==1, by(recenter_dur) // I don't think any of this is right lol
+
+set scheme cleanplots
+
+// unadjusted
+regress female_earn_pct_t treated##i.recenter_dur_pos 
+margins recenter_dur_pos#treated
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+regress female_hours_pct_t treated##i.recenter_dur_pos 
+margins recenter_dur_pos#treated
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+regress wife_housework_pct_t treated##i.recenter_dur_pos 
+margins recenter_dur_pos#treated
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+// adjusted
+local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
+
+regress female_earn_pct_t treated##i.recenter_dur_pos `controls' [pweight=ipw]
+margins recenter_dur_pos#treated // does this work?? like is it this simple?
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+regress female_hours_pct_t treated##i.recenter_dur_pos  `controls' [pweight=ipw]
+margins recenter_dur_pos#treated // does this work??
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+regress wife_housework_pct_t treated##i.recenter_dur_pos `controls'  [pweight=ipw]
+margins recenter_dur_pos#treated // does this work??
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+// teffects instead
+teffects ipwra (wife_housework_pct_t i.recenter_dur_pos) ///
+ (treated i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr, probit), atet osample(overlap)
+ 
+tebalance summarize
+
+** descriptive (not weighted)
+preserve
+
+collapse (median) female_earn_pct_t female_hours_pct_t wife_housework_pct_t if keep_flag==1, by(recenter_dur treated)
+
+// paid labor: compare the two
+twoway (line female_earn_pct_t recenter_dur if treated==0) (line female_earn_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
+
+// paid labor: compare the two
+twoway (line female_hours_pct_t recenter_dur if treated==0) (line female_hours_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
+
+// unpaid labor: compare the two
+twoway (line wife_housework_pct_t recenter_dur if treated==0) (line wife_housework_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
+
+// one way to plot it all, don't like this
+twoway (line female_earn_pct_t recenter_dur) (line wife_housework_pct_t recenter_dur, yaxis(2)), legend(order(1 "Paid Labor" 2 "Unpaid Labor") rows(1) position(6)) xtitle(`"Duration from Marital Transition"') ytitle(`"Paid Labor"') ylabel(, valuelabel) ytitle(`"Unpaid Labor"', axis(2)) by(treated)
+
+restore
