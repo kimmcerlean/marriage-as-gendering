@@ -308,6 +308,71 @@ tab dur earn_housework, row nofreq
 
 
 ********************************************************************************
+**# Option 1: fixed effects just on treated?
+********************************************************************************
+// so first need a var that is pre v. post treated. can I just use marital status?
+egen couple_id = group(unique_id partner_id)
+ 
+tab marital_status_updated treated, m
+tab year_transitioned treated, m
+tab marital_status_updated if treated==1 & survey_yr >= year_transitioned
+
+browse unique_id partner_id survey_yr marital_status_updated treated marr_trans year_transitioned // so treated transition_flag and ever_transition are the same thing at this point
+
+gen married = 0
+replace married = 1 if marital_status_updated==1
+
+tabstat female_earn_pct_t female_hours_pct_t wife_housework_pct_t if treated==1, by(married) // without controls, this is what I'd be estimating? yes
+regress female_earn_pct_t i.married if treated==1
+regress female_hours_pct_t i.married if treated==1
+regress wife_housework_pct_t i.married if treated==1
+
+ttest female_earn_pct_t if treated==1, by(married) // also same as regression
+ttest female_hours_pct_t if treated==1, by(married) // also same as regression
+ttest wife_housework_pct_t if treated==1, by(married) // also same as regression
+
+local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
+regress female_earn_pct_t i.married `controls' if treated==1
+margins married
+regress female_earn_pct_t i.married `controls' i.couple_id if treated==1
+margins married
+
+xtset couple_id
+xtreg female_earn_pct_t i.married if treated==1, fe // this exactly matches above
+margins married
+
+regress female_earn_pct_t i.married i.relationship_duration `controls' i.couple_id if treated==1
+margins married
+
+local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
+
+xtreg female_earn_pct_t i.married i.relationship_duration `controls' if treated==1, fe
+margins married
+margins relationship_duration
+marginsplot
+
+xtreg female_earn_pct_t i.married dur `controls' if treated==1, fe
+margins married
+margins, at(dur=(-5(1)10))
+marginsplot
+
+xtreg female_earn_pct_t i.married##i.relationship_duration `controls' if treated==1, fe
+margins married
+margins married, at(relationship_duration=(0(1)10))
+marginsplot
+
+local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
+// do I use controls with fixed effects? I think because that controls for observed and the remained is unobserved? I think controls let hyou control for time-varying things whereas fixed effects net out time invariant? (hence why race is collinear?)
+xtreg female_earn_pct_t i.married i.relationship_duration `controls' if treated==1 & relationship_duration<=15, fe
+margins married
+
+xtreg female_hours_pct_t i.married i.relationship_duration `controls' if treated==1 & relationship_duration<=15, fe
+margins married
+
+xtreg wife_housework_pct_t i.married i.relationship_duration `controls' if treated==1 & relationship_duration<=15, fe
+margins married
+
+********************************************************************************
 **# Preliminary PSM (this is very crude)
 ********************************************************************************
 // prob want to use characteristics at relationship start, which is relationship_duration==0 for both
@@ -337,10 +402,11 @@ browse treated psm educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fix
 // for now, estimate female_earn_pct_t female_hours_pct_t year_transitioned?? BUT how do I get the control group? do I need to do this by duration?
 tabstat female_hours_pct_t, by(treated)
 
-teffects psmatch (re78) (treat age agesq agecube educ edusq marr nodegree black hisp re74 re75 u74 u75 interaction1, logit), atet gen(pstub_cps) nn(5) // atet = aTT caliper(0.1)
+// teffects psmatch (re78) (treat age agesq agecube educ edusq marr nodegree black hisp re74 re75 u74 u75 interaction1, logit), atet gen(pstub_cps) nn(5) // atet = aTT caliper(0.1)
 
 ********************************************************************************
-**# Option: keep groups of same length and recenter control, then weight?!
+**# Option 2: keep groups of same length and recenter control, then weight?!
+* Using IPW based on PSM above?
 ********************************************************************************
 gen keep_flag=0
 replace keep_flag = 1 if treated==1 & dur >=-2 & dur<=4 & years_observed>=4
@@ -393,15 +459,15 @@ local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wif
 
 regress female_earn_pct_t treated##i.recenter_dur_pos `controls' [pweight=ipw]
 margins recenter_dur_pos#treated // does this work?? like is it this simple?
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
 
 regress female_hours_pct_t treated##i.recenter_dur_pos  `controls' [pweight=ipw]
 margins recenter_dur_pos#treated // does this work??
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
 
 regress wife_housework_pct_t treated##i.recenter_dur_pos `controls'  [pweight=ipw]
 margins recenter_dur_pos#treated // does this work??
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")  plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
 
 // teffects instead
 teffects ipwra (wife_housework_pct_t i.recenter_dur_pos) ///
