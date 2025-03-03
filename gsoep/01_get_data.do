@@ -239,6 +239,7 @@ inspect partner_id_pl if inrange(partnered_pl,1,2) // all except 2
 // for use later to add partner sample status
 keep pid syear sex_pl status_pl
 rename pid parid // to match to partner id
+gen long partner_id_pl = parid
 rename status_pl status_sp
 rename sex sex_sp
 
@@ -267,7 +268,18 @@ gen partner_in_hh=0
 replace partner_in_hh =1 if inlist(spelltyp,1,3,7)
 tab partner_in_hh has_coupid, m
 
+gen rel_type=.
+replace rel_type = 0 if spelltyp == 5 // single
+replace rel_type = 1 if spelltyp == 1 // married
+replace rel_type = 2 if spelltyp == 3 // cohab
+replace rel_type = 3 if inlist(spelltyp,2,4,6,7,8) // other rel
+
+label define rel_type 0 "Single" 1 "Married" 2 "Cohab" 3 "Other rel"
+label values rel_type rel_type
+tab spelltyp rel_type, m
+
 tab spelltyp has_coupid, m
+tab rel_type has_coupid, m
 tab event has_coupid if partner_in_hh==1, m // none of these really systematically related to who has this info
 tab remark has_coupid if partner_in_hh==1, m // none of these really systematically related to who has this info 
 tab beginy has_coupid if partner_in_hh==1, m row
@@ -291,7 +303,23 @@ replace intact=1 if inlist(censor,5,9,13) // last spell? okay, yes, see p 14 of 
 gen intact_alt=0
 replace intact_alt=1 if pdeath==0 & divorce==0 // think one problem is divorce is OFFICIAl divorce, not separation AND not cohab relationship end. so might those be not apply also? if not a marital relationship?
 
+tab intact intact_alt, m
+
+browse pid spellnr rel_type beginy endy intact intact_alt
+
 save "$temp/biocouplm_cleaned.dta", replace
+
+keep pid spellnr rel_type beginy endy begin end pdeath divorce right_censored left_censored intact intact_alt
+
+foreach var in rel_type beginy endy begin end pdeath divorce right_censored left_censored intact intact_alt{
+	rename `var' mh_`var'
+}
+
+reshape wide mh_rel_type mh_beginy mh_endy mh_begin mh_end mh_pdeath mh_divorce mh_left_censored mh_right_censored mh_intact mh_intact_alt, j(spellnr) i(pid)
+
+browse pid mh_rel_type1 mh_beginy1 mh_endy1 mh_rel_type2 mh_beginy2 mh_endy2
+
+save "$temp/biocouplm_wide.dta"
 
 // couple year \\
 use "$GSOEP/biocouply.dta", clear // this is my preferred file, but the problem is, it is not comprehensive because not until wave 28
@@ -321,10 +349,18 @@ unique pid, by(spelltyp) // 71272 married in HH,  coupled in HH - duh doesn't tr
 // look at regular biography also?? to see what THAT has for relationship history? because all of these files are different levels with diff levels of accuracy?
 use "$GSOEP/biol.dta", clear
 
+label language EN
+
 unique pid // 94004, 130429
-tab syear  // so it is pid year, but a lot of pids don't have multiple year records. Is this just when the history was updated? the codebook is not v. helpful...
+tab syear  // so it is pid year, but a lot of pids don't have multiple year records. Is this just when the history was updated? the codebook is not v. helpful... okay i think it's meant to be just one record for individual and history is wide?
 sort pid syear
 browse pid syear
+
+browse pid syear
+tab lb0285, m // number of children. many are missing /  negative
+tab lb0286_h, m // has no children
+tab lb0287_h, m // year of first birth - also so many -5
+tab lb0312_h, m // beginning of marriage 1 - also so many -5
 
 ********************************************************************************
 * Other files
@@ -332,6 +368,24 @@ browse pid syear
 // household file
 use "$GSOEP/hl.dta", clear
 label language EN
+
+unique hid
+unique hid syear // so this is the level of the file
+
+tab hlk0044_v1, m // children under 16 in HH - oh this is just yes / no. generally good coverage, about 3.5% missing. let's see what other HH variables I might need?
+
+rename hlc0005_h hh_net_income_monthly_hl
+rename hlf0261 outside_help_hl
+rename hlf0001_h housing_status_hl
+rename hlk0044_v1 num_children_u16_hl
+rename hlc0043 num_children_hl
+rename hlf0291 aid_in_hh_hl
+
+keep hid syear hh_net_income_monthly_hl outside_help_hl housing_status_hl num_children_u16_hl num_children_hl aid_in_hh_hl
+
+mvdecode _all, mv(-8=.s\-7/-6=.\-5=.s\-4/-3=.\-2=.n\-1=.)
+
+save "$temp/hl_cleaned.dta", replace
 
 ********************************************************************************
 **# * Attempt to at merge all key individual characteristics
@@ -346,6 +400,8 @@ drop _merge
 merge 1:1 pid hid cid syear using "$temp/ppathl_cleaned.dta"
 drop if _merge==2
 drop _merge
+
+unique pid // so this still matches what is in pl file
 
 // didnt do this above for all, should I just move this here for ease?
 mvdecode _all, mv(-8=.s\-7/-6=.\-5=.s\-4/-3=.\-2=.n\-1=.) // .s = not in survey, .n is n/a, regular missing is dk, etc.
@@ -388,10 +444,20 @@ replace partner_id_check=1 if partner_id_pg==partner_id_pl & partner_id_pg!=.n &
 tab partner_id_check if partnered_total==1, m // generally match, but not sure of those with no id...revisit
 
 tab marst partnered, m
+tab partnered partner_in_hh, m
 tab partnered_pg partnered_pl, m // okay, so these match
-tab partnered_pl partnered, m // these match less good...is this the annual / month thing? (partnered if from pl file)
+tab partnered_pl partnered // these match less good...is this the annual / month thing? (partnered if from pl file).
+tab partnered_pl partnered if partner_in_hh==1, m // okay, actually think bc it's partner IN HH specifically. yes, that seems true looking at codebook
+tab partnered_pl partnered if partner_in_hh==2, m
 tab partnered_pg partnered, m // these match less good...
+tab partnered_pg partnered if partner_in_hh==1, m // yes
+tab partnered_pg partnered if partner_in_hh==2, m // no
 
-// then need to do some variable cleanup / recoding / inspecting for core variables before merging with partner info
+tab marst_defacto partnered_total, m
+inspect partner_id_pg if partnered_total==1 // about 10000 missing (I think some fo these are partner doesn't live in HH
+inspect partner_id_pl if partnered_total==1
+
+unique pid, by(marst_defacto)
+unique pid partner_id_pl, by(marst_defacto)
 
 save "$temp/individ_data.dta", replace
