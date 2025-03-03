@@ -233,6 +233,9 @@ browse
 
 save "$temp/ppathl_cleaned.dta", replace
 
+inspect partner_id_pl if inrange(partnered_pl,1,4) // so all except 6 have valid id
+inspect partner_id_pl if inrange(partnered_pl,1,2) // all except 2
+
 // for use later to add partner sample status
 keep pid syear sex_pl status_pl
 rename pid parid // to match to partner id
@@ -373,13 +376,20 @@ tab partnered_pl partnered_total, m // some people labeled as married, but don't
 // make sure partner ids that came from the two different places (e.g. pg v. pl) match once I compile?
 sort pid syear
 browse pid hid syear age marst_defacto partnered_pg partner_id_pg partnered_pl partner_id_pl partnerid_v1 partnerid_v2 partnerid_v3 partnerid_v4 partnerid_v5
+
+foreach var in partner_id_pg partner_id_pl partnerid_v1 partnerid_v2 partnerid_v3 partnerid_v4 partnerid_v5{ // these v# ones aren't very good
+	inspect `var' if partnered_total==1
+}
+
 gen partner_id_check=.
 replace partner_id_check=0 if partner_id_pg!=partner_id_pl & partner_id_pg!=.n & partner_id_pg!=.n
 replace partner_id_check=1 if partner_id_pg==partner_id_pl & partner_id_pg!=.n & partner_id_pg!=.n
 
+tab partner_id_check if partnered_total==1, m // generally match, but not sure of those with no id...revisit
+
 tab marst partnered, m
 tab partnered_pg partnered_pl, m // okay, so these match
-tab partnered_pl partnered, m // these match less good...is this the annual / month thingg?
+tab partnered_pl partnered, m // these match less good...is this the annual / month thing? (partnered if from pl file)
 tab partnered_pg partnered, m // these match less good...
 
 // then need to do some variable cleanup / recoding / inspecting for core variables before merging with partner info
