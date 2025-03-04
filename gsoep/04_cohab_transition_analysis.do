@@ -145,16 +145,16 @@ ttest female_earn_pct_net if treated==1, by(married)
 local controls "i.isced97_pg i.isced97_pg_sp i.where_germany_pl age age_sp couple_earnings_net i.housing_status_hl num_children_hl rel_start_all"
 regress female_earn_pct_net i.married `controls' if treated==1
 margins married
-regress female_earn_pct_net i.married `controls' i.couple_id if treated==1
-margins married
+// regress female_earn_pct_net i.married `controls' i.couple_id if treated==1
+// margins married
 
 xtset couple_id
 
 xtreg female_earn_pct_net i.married `controls' if treated==1, fe // this exactly matches above
 margins married
 
-regress female_earn_pct_net i.married i.relationship_duration `controls' i.couple_id if treated==1
-margins married
+// regress female_earn_pct_net i.married i.relationship_duration `controls' i.couple_id if treated==1
+// margins married
 
 local controls "i.isced97_pg i.isced97_pg_sp i.where_germany_pl age age_sp couple_earnings_net i.housing_status_hl num_children_hl rel_start_all"
 
@@ -195,7 +195,7 @@ margins married
 bysort pid partner_id_pl: egen min_dur = min(relationship_duration)
 tab min_dur, m // 98.6% observer year 1 or 2
 
-logit treated i.isced97_pg i.isced97_pg_sp i.where_germany_pl age age_sp couple_earnings_net i.housing_status_hl num_children_hl rel_start_all if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
+logit treated i.isced97_pg i.isced97_pg_sp i.emplst_pg i.emplst_pg_sp i.psample_pl i.psample_pl_sp i.where_germany_pl age age_sp couple_earnings_net i.housing_status_hl num_children_hl rel_start_all if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
 predict psm if relationship_duration==min_dur
 
 bysort pid partner_id_pl: egen pscore = max(psm)
@@ -259,7 +259,8 @@ marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3"
 
 
 // adjusted
-local controls "i.isced97_pg i.isced97_pg_sp i.where_germany_pl age age_sp couple_earnings_net i.housing_status_hl num_children_hl rel_start_all"
+// local controls "i.isced97_pg i.isced97_pg_sp i.where_germany_pl age age_sp couple_earnings_net i.housing_status_hl num_children_hl rel_start_all"
+local control "i.isced97_pg i.isced97_pg_sp i.psample_pl i.psample_pl_sp i.where_germany_pl age age_sp couple_earnings_net i.housing_status_hl num_children_hl rel_start_all"
 
 regress female_earn_pct_net treated##i.recenter_dur_pos `controls' [pweight=ipw]
 margins recenter_dur_pos#treated // does this work?? like is it this simple?
