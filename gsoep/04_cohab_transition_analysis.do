@@ -92,10 +92,15 @@ browse pid partner_id_pl syear years_observed years_married years_cohab ever_tra
 tab age employed_binary, row
 keep if (age>=18 & age<=60) &  (age_sp>=18 & age_sp<=60) // sort of drops off a cliff after 60?
 
-
 ********************************************************************************
 **# okay make analytical sample and recode duration relative to marital transition
 ********************************************************************************
+// before dropping, get descriptive comparison of cohabitors to married couples
+tabstat female_earn_pct_net female_hours_pct_t female_housework_pct_avg female_childcare_pct_avg, by(marst_defacto) 
+ttest female_earn_pct_net, by(marst_defacto) 
+ttest female_hours_pct_t, by(marst_defacto) 
+ttest female_housework_pct_avg, by(marst_defacto) 
+ttest female_childcare_pct_avg, by(marst_defacto) 
 
 keep if ever_transition==1 | always_cohab==1 // so keeping a "control" group - basically drops those always married
 
