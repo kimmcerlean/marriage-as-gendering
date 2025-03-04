@@ -147,6 +147,13 @@ tab ever_transition transition_flag, m
 ********************************************************************************
 **# okay make analytical sample and recode duration relative to marital transition
 ********************************************************************************
+
+// before dropping, get descriptive comparison of cohabitors to married couples
+tabstat female_earn_pct_t female_hours_pct_t wife_housework_pct_t, by(marital_status_updated) 
+ttest female_earn_pct_t, by(marital_status_updated) 
+ttest female_hours_pct_t, by(marital_status_updated) 
+ttest wife_housework_pct_t, by(marital_status_updated) 
+
 keep if transition_flag==1 | always_cohab==1 // so keeping a "control" group - basically drops those always married
 
 browse unique_id partner_id survey_yr transition_flag always_cohab rel_start_yr year_transitioned relationship_duration marital_status_updated
