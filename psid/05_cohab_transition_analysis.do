@@ -241,7 +241,7 @@ tab earn_housework_t treated, col
 ********************************************************************************
 **# DESCRIPTIVE ANALYSIS
 ********************************************************************************
-// descriptive
+/*/ descriptive
 
 ** total sample
 preserve
@@ -330,7 +330,7 @@ tab dur hh_earn_type, row nofreq
 tab dur housework_bkt, row nofreq
 tab dur earn_housework, row nofreq
 // tab dur hours_housework, row nofreq
-
+*/
 
 ********************************************************************************
 **# Option 1: fixed effects just on treated?
@@ -404,11 +404,11 @@ margins married
 bysort unique_id partner_id: egen min_dur = min(relationship_duration)
 tab min_dur, m // 90% observed in first year
 
-logit treated i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
+logit treated i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed i.sample_type AGE_HEAD_ AGE_WIFE_ i.ft_pt_t1_head i.ft_pt_t1_wife couple_earnings_t1 housework_head housework_wife i.home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
 predict psm if relationship_duration==min_dur
 
 // alt estimator
-pscore treated educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur, pscore(psm_alt) logit 
+// pscore treated educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ i.ft_pt_t1_head i.ft_pt_t1_wife couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur, pscore(psm_alt) logit 
 
 bysort unique_id partner_id: egen pscore = max(psm)
 sort unique_id partner_id survey_yr
@@ -420,7 +420,9 @@ sum psm if treated==0, det
 sum psm if treated==1, det
 tabstat pscore, by(treated)
 
-twoway (histogram psm if treated==1, width(.02) color(blue%30)) (histogram psm if treated==0, width(.02) color(red%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6))
+set scheme cleanplots
+twoway (histogram psm if treated==1, width(.02) color(pink%30)) (histogram psm if treated==0, width(.02) color(gs8%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle("Propensity Score")
+twoway (histogram pscore if treated==1, width(.02) color(blue%30)) (histogram pscore if treated==0, width(.02) color(red%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6))
 
 browse treated psm educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==0
 

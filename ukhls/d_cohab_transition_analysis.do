@@ -373,7 +373,7 @@ margins married
 bysort pidp partner_id: egen min_dur = min(relationship_duration)
 tab min_dur, m // 70% observed year 1 or 2
 
-logit treated i.hiqual_dv i.hiqual_dv_sp i.xw_memorig i.xw_memorig_sp i.xw_ethn_dv i.xw_ethn_dv_sp age_all age_all_sp i.jbstat i.jbstat_sp couple_earnings_t i.home_owner nchild_dv rel_start_all if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
+logit treated i.hiqual_dv i.hiqual_dv_sp i.xw_memorig i.xw_memorig_sp i.xw_ethn_dv i.xw_ethn_dv_sp age_all age_all_sp i.jbstat i.jbstat_sp couple_earnings_t housework_man housework_woman i.home_owner nchild_dv rel_start_all if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
 predict psm if relationship_duration==min_dur
 
 bysort pidp partner_id: egen pscore = max(psm)
@@ -385,7 +385,8 @@ sum psm if treated==0, det
 sum psm if treated==1, det
 tabstat pscore, by(treated)
 
-twoway (histogram psm if treated==1, width(.02) color(blue%30)) (histogram psm if treated==0, width(.02) color(red%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6))
+set scheme cleanplots
+twoway (histogram psm if treated==1, width(.02) color(pink%30)) (histogram psm if treated==0, width(.02) color(gs8%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle("Propensity Score")
 
 ********************************************************************************
 **# Option 2: keep groups of same length and recenter control, then weight?!

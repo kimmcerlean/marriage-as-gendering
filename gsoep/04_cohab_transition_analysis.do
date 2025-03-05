@@ -248,7 +248,7 @@ margins married
 bysort pid partner_id_pl: egen min_dur = min(relationship_duration)
 tab min_dur, m // 98.6% observer year 1 or 2
 
-logit treated i.isced97_pg i.isced97_pg_sp i.emplst_pg i.emplst_pg_sp i.psample_pl i.psample_pl_sp i.where_germany_pl age age_sp couple_earnings_net i.housing_status_hl num_children_hl rel_start_all if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
+logit treated i.isced97_pg i.isced97_pg_sp i.emplst_pg i.emplst_pg_sp i.psample_pl i.psample_pl_sp i.where_germany_pl age age_sp couple_earnings_net housework_daily_avg housework_daily_avg_sp i.housing_status_hl num_children_hl rel_start_all if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
 predict psm if relationship_duration==min_dur
 
 bysort pid partner_id_pl: egen pscore = max(psm)
@@ -261,7 +261,9 @@ sum psm if treated==0, det
 sum psm if treated==1, det
 tabstat pscore, by(treated)
 
-twoway (histogram psm if treated==1, width(.02) color(blue%30)) (histogram psm if treated==0, width(.02) color(red%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6))
+set scheme cleanplots
+twoway (histogram psm if treated==1, width(.02) color(pink%30)) (histogram psm if treated==0, width(.02) color(gs8%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle("Propensity Score")
+twoway (histogram pscore if treated==1, width(.02) color(pink%30)) (histogram pscore if treated==0, width(.02) color(gs8%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle("Propensity Score")
 
 ********************************************************************************
 **# Option 2: keep groups of same length and recenter control, then weight?!
