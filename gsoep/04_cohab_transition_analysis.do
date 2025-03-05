@@ -92,16 +92,58 @@ browse pid partner_id_pl syear years_observed years_married years_cohab ever_tra
 tab age employed_binary, row
 keep if (age>=18 & age<=60) &  (age_sp>=18 & age_sp<=60) // sort of drops off a cliff after 60?
 
+// create couple-level education
+tab isced97_pg isced97_pg_sp, m
+
+gen couple_educ_gp=0
+replace couple_educ_gp = 1 if isced97_pg==6 | isced97_pg_sp==6
+replace couple_educ_gp=. if isced97_pg==. & isced97_pg_sp==.
+
+tab couple_educ_gp, m
+
+// home_owners
+recode housing_status_hl (.n=.)(.s=.)(1/2=0)(3=1)(4/5=0), gen(home_owner)
+tab home_owner, m
+tab housing_status_hl home_owner, m
+
+// children
+gen kids_in_hh=.
+replace kids_in_hh=0 if num_children_hl==0 & num_children_hl_sp==0
+replace kids_in_hh=1 if (num_children_hl>0 & num_children_hl<100) | (num_children_hl_sp>0 & num_children_hl_sp<100)
+
+tab kids_in_hh, m
+tab num_children_hl kids_in_hh, m
+
+// age
+gen age_woman = age if sex_pl==2
+replace age_woman = age_sp if sex_pl==1
+
+gen age_man = age if sex_pl==1
+replace age_man = age_sp if sex_pl==2
+
 ********************************************************************************
-**# okay make analytical sample and recode duration relative to marital transition
+* before dropping, get descriptive comparison of cohabitors to married couples
 ********************************************************************************
-// before dropping, get descriptive comparison of cohabitors to married couples
+
 tabstat female_earn_pct_net female_hours_pct_t female_housework_pct_avg female_childcare_pct_avg, by(marst_defacto) 
 ttest female_earn_pct_net, by(marst_defacto) 
 ttest female_hours_pct_t, by(marst_defacto) 
 ttest female_housework_pct_avg, by(marst_defacto) 
 ttest female_childcare_pct_avg, by(marst_defacto) 
 
+unique pid partner_id_pl, by(marst_defacto) 
+unique pid partner_id_pl if marst_defacto==1
+unique pid partner_id_pl if marst_defacto==2
+
+// % ever transition
+tab marst_defacto ever_transition, row
+
+// some small descriptives
+tabstat age_woman age_man couple_earnings_net couple_educ_gp home_owner kids_in_hh, by(marst_defacto)
+
+********************************************************************************
+**# okay make analytical sample and recode duration relative to marital transition
+********************************************************************************
 keep if ever_transition==1 | always_cohab==1 // so keeping a "control" group - basically drops those always married
 
 gen treated=.
@@ -123,6 +165,12 @@ browse pid partner_id_pl syear treated marst_defacto year_transitioned relations
 ********************************************************************************
 * Add descriptive statistics and descriptive exploration
 ********************************************************************************
+unique pid partner_id_pl, by(treated) 
+unique pid partner_id_pl if treated==0
+unique pid partner_id_pl if treated==1
+
+// some small descriptives
+tabstat age_woman age_man couple_earnings_net couple_educ_gp home_owner kids_in_hh, by(treated)
 
 ********************************************************************************
 **# Option 1: fixed effects just on treated?
@@ -248,19 +296,19 @@ set scheme cleanplots
 // unadjusted
 regress female_earn_pct_net treated##i.recenter_dur_pos 
 margins recenter_dur_pos#treated
-marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3" 9 "4" 10 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3" 9 "4" 10 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
 
 regress female_hours_pct_t treated##i.recenter_dur_pos 
 margins recenter_dur_pos#treated
-marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3" 9 "4" 10 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3" 9 "4" 10 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
 
 regress female_housework_pct_avg treated##i.recenter_dur_pos 
 margins recenter_dur_pos#treated
-marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3" 9 "4" 10 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3" 9 "4" 10 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
 
 regress female_childcare_pct_avg treated##i.recenter_dur_pos 
 margins recenter_dur_pos#treated
-marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3" 9 "4" 10 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Childcare Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel(1 "-4" 2 "-3" 3 "-2" 4 "-1" 5 "Transition" 6 "1" 7 "2" 8 "3" 9 "4" 10 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Childcare Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
 
 
 // adjusted

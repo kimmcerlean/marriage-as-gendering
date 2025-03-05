@@ -12,8 +12,9 @@
 
 * My home directory varies based on which computing environment I am in
 
-if `"`c(hostname)'"' == "LAPTOP-TP2VHI6B" global homedir `"G:/Other computers/My Laptop/Documents/"' // Kim's Personal Computer
-if `"`c(hostname)'"' == "PPRC-STATS-P01" global homedir `"T:"' // PRC Stats Server
+if `"`c(hostname)'"' == "LAPTOP-TP2VHI6B" global homedir `"C:/Users/mcerl/OneDrive - Istituto Universitario Europeo/projects/Marriage as Gendering"' // Kim's Personal Computer
+// if `"`c(hostname)'"' == "LAPTOP-TP2VHI6B" global homedir `"G:/Other computers/My Laptop/Documents"' // Kim's Personal Computer
+if `"`c(hostname)'"' == "PPRC-STATS-P01" global homedir `"T:/Research Projects/Marriage as Gendering"' // PRC Stats Server
 if `"`c(hostname)'"' == "60018D" global homedir `"C:/Users/kmcerlea/OneDrive - Istituto Universitario Europeo/projects"' // EUI 
 
 * This is the base directory with the setup files.
@@ -24,10 +25,10 @@ global code "$homedir/github/marriage-as-gendering/psid"
 global PSID "$homedir/data/PSID"
 
 * created data files
-global created_data "$homedir/Research Projects/Marriage as Gendering/created data"
+global created_data "$homedir/created data/psid"
 
 * temporary processing files
-global temp "$homedir/Research Projects/Marriage as Gendering/temp data"
+global temp "$homedir/temp data/psid"
 
 * results
-global results "$homedir/Research Projects/Marriage as Gendering/results" 
+global results "$homedir/results/psid" 

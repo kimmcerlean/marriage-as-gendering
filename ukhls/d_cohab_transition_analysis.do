@@ -92,17 +92,46 @@ replace always_cohab=1 if years_observed==years_cohab & years_cohab!=.
 tab age_all employed, row
 keep if (age_all>=18 & age_all<60) &  (age_all_sp>=18 & age_all_sp<60) // sort of drops off a cliff after 60?
 
-// stopped here 3/4/25 - NEED TO FINISH THIS ASAP
+// create couple-level education
+tab college_degree college_degree_sp
+
+gen couple_educ_gp=0
+replace couple_educ_gp = 1 if college_degree==1 | college_degree_sp==1
+replace couple_educ_gp=. if college_degree==. & college_degree_sp==.
+
+// home_owners
+recode tenure_dv (-9/-7=.)(1/2=1)(3/8=0), gen(home_owner)
+tab home_owner, m
+tab tenure_dv home_owner, m
+
+// age
+gen age_woman = age_all if sex==2
+replace age_woman = age_all_sp if sex==1
+
+gen age_man = age_all if sex==1
+replace age_man = age_all_sp if sex==2
 
 ********************************************************************************
-**# okay make analytical sample and recode duration relative to marital transition
+* before dropping, get descriptive comparison of cohabitors to married couples
 ********************************************************************************
-// before dropping, get descriptive comparison of cohabitors to married couples
 tabstat female_earn_pct_t female_hours_pct_t female_housework_pct_t, by(marital_status_defacto) 
 ttest female_earn_pct_t, by(marital_status_defacto) 
 ttest female_hours_pct_t, by(marital_status_defacto) 
 ttest female_housework_pct_t, by(marital_status_defacto) 
 
+unique pidp partner_id, by(marital_status_defacto) 
+unique pidp partner_id if marital_status_defacto==1
+unique pidp partner_id if marital_status_defacto==2
+
+// % ever transition
+tab marital_status_defacto ever_transition, row
+
+// some small descriptives
+tabstat age_woman age_man couple_earnings_t couple_educ_gp home_owner kids_in_hh, by(marital_status_defacto)
+
+********************************************************************************
+**# okay make analytical sample and recode duration relative to marital transition
+********************************************************************************
 keep if ever_transition==1 | always_cohab==1 // so keeping a "control" group - basically drops those always married
 
 gen treated=.
@@ -122,17 +151,6 @@ tab duration_cohab, m
 
 browse pidp partner_id int_year treated marital_status_defacto marr_trans rel_start_all year_transitioned relationship_duration duration_cohab
 
-// create couple-level education
-tab college_degree college_degree_sp
-
-gen couple_educ_gp=0
-replace couple_educ_gp = 1 if college_degree==1 | college_degree_sp==1
-replace couple_educ_gp=. if college_degree==. & college_degree_sp==.
-
-// home_owners
-recode tenure_dv (-9/-7=.)(1/2=1)(3/8=0), gen(home_owner)
-tab home_owner, m
-tab tenure_dv home_owner, m
 
 //  combined indicator of paid and unpaid, using HOURS - okay currently missing for all years that housework hours are
 /*
@@ -162,7 +180,6 @@ label values earn_housework earn_housework
 
 ********************************************************************************
 **# Some descriptive statistics
-* (Not yet revisited)
 ********************************************************************************
 
 unique pidp partner_id 
@@ -181,10 +198,17 @@ tab xw_ethn_dv treated, m row
 tab kids_in_hh
 tab kids_in_hh if relationship_duration==0
 
-tab had_birth
-unique pidp partner_id  if had_birth==1 // use this for % experiencing a birth
-unique pidp partner_id  if had_birth==1 & duration_cohab==0
-tab had_birth if duration_cohab==0
+unique pidp partner_id, by(treated) 
+unique pidp partner_id if treated==0
+unique pidp partner_id if treated==1
+
+// some small descriptives
+tabstat age_woman age_man couple_earnings_t couple_educ_gp home_owner kids_in_hh, by(treated)
+
+// tab had_birth
+// unique pidp partner_id  if had_birth==1 // use this for % experiencing a birth
+// unique pidp partner_id  if had_birth==1 & duration_cohab==0
+// tab had_birth if duration_cohab==0
 
 sum female_earn_pct_t
 tab hh_earn_type_t

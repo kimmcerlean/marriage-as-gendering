@@ -145,14 +145,28 @@ replace transition_flag=0 if ever_transition==1 & rel_start_yr > year_transition
 tab ever_transition transition_flag, m
 
 ********************************************************************************
-**# okay make analytical sample and recode duration relative to marital transition
+* before dropping, get descriptive comparison of cohabitors to married couples
 ********************************************************************************
 
-// before dropping, get descriptive comparison of cohabitors to married couples
 tabstat female_earn_pct_t female_hours_pct_t wife_housework_pct_t, by(marital_status_updated) 
 ttest female_earn_pct_t, by(marital_status_updated) 
 ttest female_hours_pct_t, by(marital_status_updated) 
 ttest wife_housework_pct_t, by(marital_status_updated) 
+
+unique unique_id partner_id, by(marital_status_updated) 
+unique unique_id partner_id if marital_status_updated==1
+unique unique_id partner_id if marital_status_updated==2
+
+// % ever transition
+tab marital_status_updated ever_transition, row
+tab ever_transition if transition_flag==1 | always_cohab==1
+
+// some small descriptives
+tabstat AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 couple_educ_gp home_owner children, by(marital_status_updated)
+
+********************************************************************************
+**# okay make analytical sample and recode duration relative to marital transition
+********************************************************************************
 
 keep if transition_flag==1 | always_cohab==1 // so keeping a "control" group - basically drops those always married
 
@@ -173,6 +187,10 @@ tab duration_cohab, m
 recode duration_cohab(-24/-11=-5)(-10/-7=-4)(-6/-5=-3)(-4/-3=-2)(-2/-1=-1)(0=0)(1/2=1)(3/4=2)(5/6=3)(7/8=4)(9/10=5)(11/12=6)(13/20=7)(21/30=8), gen(dur) // smoothing (bc the switch to every other year makes this wonky)
 
 unique unique_id, by(treated)
+unique unique_id partner_id, by(treated)
+unique unique_id partner_id if treated==0
+unique unique_id partner_id if treated==1
+
 tab years_observed treated, m col
 unique unique_id if treated==0, by(years_observed) // like if I want to use 4 years even, there are only 186 control uniques...oh duh, kim, you sum all of them 4+ DUH because this is constant
 unique unique_id if treated==1, by(years_observed) // 190 treated at 4 years. so, is this actually even going to work on is this too small of a group
@@ -200,7 +218,7 @@ tab treated educ_type if relationship_duration==0, row
 
 tab raceth_head_fixed treated, col
 
-tabstat AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner, by(treated)
+tabstat AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 couple_educ_gp home_owner children, by(treated)
 
 tab treated children, row
 tab treated children if relationship_duration==0, row m 
