@@ -32,3 +32,7 @@ global temp "$homedir/temp data/psid"
 
 * results
 global results "$homedir/results/psid" 
+
+ssc install psmatch2, replace
+
+set seed 8675309

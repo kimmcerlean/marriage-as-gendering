@@ -215,9 +215,46 @@ browse unique_id survey_yr marital_status_updated flag rel_number rel_start_est_
 replace rel_start_yr=rel_start_est_cohab if rel_start_yr==. & marital_status_updated==2
 */
 
-gen relationship_duration = survey_yr - rel_start_yr
 
-browse unique_id survey_yr marital_status_updated rel_start_yr relationship_duration
+********************************************************************************
+* Let's add partner ID here to troubleshoot relationship start and end dates
+********************************************************************************
+// (this used to happen at start of step 5)
+// first get partner_id before I drop before
+gen id_head=.
+replace id_head = unique_id if relationship==1 
+bysort survey_yr main_fam_id FAMILY_INTERVIEW_NUM_ (id_head): replace id_head = id_head[1]
+
+gen id_wife=.
+replace id_wife = unique_id if relationship==2
+bysort survey_yr main_fam_id FAMILY_INTERVIEW_NUM_ (id_wife): replace id_wife = id_wife[1]
+
+sort survey_yr FAMILY_INTERVIEW_NUM_
+browse unique_id main_fam_id FAMILY_INTERVIEW_NUM_ survey_yr relationship id_head id_wife
+
+gen partner_id=.
+replace partner_id = id_head if relationship==2 // so need opposite id
+replace partner_id = id_wife if relationship==1
+
+// think I need to fix duration because for some, I think clock might start again when they transition to cohabitation? get minimum year within a couple as main start date?
+bysort survey_yr main_fam_id FAMILY_INTERVIEW_NUM_: egen rel_start_yr_couple = min(rel_start_yr)
+bysort survey_yr main_fam_id FAMILY_INTERVIEW_NUM_: egen rel_end_yr_couple = min(rel_end_yr)
+
+sort survey_yr FAMILY_INTERVIEW_NUM_
+browse unique_id main_fam_id partner_id FAMILY_INTERVIEW_NUM_ survey_yr relationship id_head id_wife rel_start_yr_couple rel_end_yr_couple
+
+sort unique_id partner_id survey_yr
+browse unique_id partner_id survey_yr rel_start_yr rel_start_yr_couple rel_end_yr rel_end_yr_couple marital_status_updated
+
+bysort unique_id partner_id: egen rel_start_all = min(rel_start_yr_couple)
+bysort unique_id partner_id: egen rel_end_all = max(rel_end_yr_couple)
+
+browse unique_id partner_id survey_yr marital_status_updated rel_start_all rel_end_all rel_start_yr_couple rel_end_yr_couple
+
+// gen relationship_duration = survey_yr - rel_start_yr
+gen relationship_duration = survey_yr - rel_start_all
+
+browse unique_id partner_id survey_yr marital_status_updated rel_start_all rel_start_yr relationship_duration
 
 ********************************************************************************
 **# Other variable recodes now, like DoL and sociodemographics
@@ -967,10 +1004,13 @@ replace home_owner=1 if HOUSE_STATUS_==1
 
 // some age things
 gen year_birth = survey_yr - AGE_INDV
+replace year_birth = year_birth + 1000 if year_birth < 1800
 // browse unique_id survey_yr SEX year_birth  AGE_INDV AGE_HEAD_ AGE_WIFE_
 
 gen yr_born_head = survey_yr - AGE_HEAD_
 gen yr_born_wife = survey_yr- AGE_WIFE_
+replace yr_born_head = yr_born_head + 1000 if yr_born_head < 1800
+replace yr_born_wife = yr_born_wife + 1000 if yr_born_wife < 1800
 
 gen age_mar_head = rel_start_yr -  yr_born_head
 gen age_mar_wife = rel_start_yr -  yr_born_wife

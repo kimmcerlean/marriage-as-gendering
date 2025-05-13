@@ -19,23 +19,7 @@
 ********************************************************************************
 use "$created_data/PSID_partners_cleaned.dta", clear
 
-// first get partner_id before I drop before
-gen id_head=.
-replace id_head = unique_id if relationship==1 
-bysort survey_yr main_fam_id FAMILY_INTERVIEW_NUM_ (id_head): replace id_head = id_head[1]
-
-gen id_wife=.
-replace id_wife = unique_id if relationship==2
-bysort survey_yr main_fam_id FAMILY_INTERVIEW_NUM_ (id_wife): replace id_wife = id_wife[1]
-
-sort survey_yr FAMILY_INTERVIEW_NUM_
-browse unique_id main_fam_id FAMILY_INTERVIEW_NUM_ survey_yr relationship id_head id_wife
-
-gen partner_id=.
-replace partner_id = id_head if relationship==2 // so need opposite id
-replace partner_id = id_wife if relationship==1
-
-browse unique_id main_fam_id partner_id FAMILY_INTERVIEW_NUM_ survey_yr relationship id_head id_wife
+egen couple_id = group(unique_id partner_id)
 
 // now work on deduplicating
 tab SEX marital_status_updated if SEX_HEAD_==1
@@ -89,10 +73,10 @@ Married (or pre77) |    163,608       93.39       93.39
 
 // should I restrict to certain years? aka to help with the cohab problem? well probably should from a time standpoint... and to match to the british one, at least do 1990+?
 tab survey_yr marital_status_updated
-tab rel_start_yr marital_status_updated, m
+tab rel_start_all marital_status_updated, m
 
 unique unique_id, by(marital_status_updated) 
-unique unique_id if rel_start_yr >= 1990, by(marital_status_updated) // nearly half of sample goes away. o
+unique unique_id if rel_start_yr >= 1990, by(marital_status_updated) // nearly half of sample goes away.
 unique unique_id if rel_start_yr >= 1985, by(marital_status_updated)
 keep if rel_start_yr >= 1985 // cohabitation not even reliably measured until mid-1980s
 
@@ -100,7 +84,7 @@ keep if rel_start_yr >= 1985 // cohabitation not even reliably measured until mi
 tab AGE_HEAD_ employed_head, row
 keep if (AGE_HEAD_>=18 & AGE_HEAD_<=60) &  (AGE_WIFE_>=18 & AGE_WIFE_<=60) // sort of drops off a cliff after 60?
 
-// identify couples who ever transitioned to marriage - but need to do WITHIN a given relationship?! except do cohab and marriage of same couple have diff start / end dates? because can just sort by unique ID and rel start year?! because those cover all records. okay yeah, crap, they do, let's try to figure this out.
+// identify couples who ever transitioned to marriage - but need to do WITHIN a given relationship?! except do cohab and marriage of same couple have diff start / end dates (okay, I fixed this now in step 4) because can just sort by unique ID and rel start year?! because those cover all records.
 // how do I also get those partnered whole time? so I need two samples - cohabitors whole time and transitioners. Married whole time, I don't want.
 
 sort unique_id survey_yr
@@ -110,7 +94,9 @@ tab marital_status_updated marr_trans, m
 
 bysort unique_id partner_id (marr_trans): egen ever_transition = max(marr_trans)
 gen year_transitioned=survey_yr if marr_trans==1
+gen dur_transitioned=relationship_duration if marr_trans==1
 bysort unique_id partner_id (year_transitioned): replace year_transitioned = year_transitioned[1]
+bysort unique_id partner_id (dur_transitioned): replace dur_transitioned = dur_transitioned[1]
 
 bysort unique_id partner_id: egen years_observed=count(survey_yr)
 bysort unique_id partner_id (years_observed): replace years_observed = years_observed[1]
@@ -121,8 +107,8 @@ bysort unique_id partner_id (years_married): replace years_married = years_marri
 bysort unique_id partner_id: egen years_cohab=count(survey_yr) if marital_status_updated==2
 bysort unique_id partner_id (years_cohab): replace years_cohab = years_cohab[1]
 
-sort unique_id survey_yr
-browse unique_id partner_id survey_yr years_observed years_married years_cohab ever_transition marital_status_updated marr_trans rel_start_yr  year_transitioned
+sort unique_id partner_id survey_yr
+browse unique_id partner_id survey_yr relationship_duration marital_status_updated years_observed years_married years_cohab ever_transition marr_trans rel_start_all  year_transitioned dur_transitioned
 
 gen always_married=0
 replace always_married=1 if years_observed==years_married & years_married!=.
@@ -170,7 +156,7 @@ tabstat AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 couple_educ_gp home_owner childre
 
 keep if transition_flag==1 | always_cohab==1 // so keeping a "control" group - basically drops those always married
 
-browse unique_id partner_id survey_yr transition_flag always_cohab rel_start_yr year_transitioned relationship_duration marital_status_updated
+browse unique_id partner_id survey_yr transition_flag always_cohab rel_start_all year_transitioned relationship_duration marital_status_updated
 
 gen treated=.
 replace treated=1 if ever_transition==1
@@ -332,12 +318,336 @@ tab dur earn_housework, row nofreq
 // tab dur hours_housework, row nofreq
 */
 
+
 ********************************************************************************
-**# Option 1: fixed effects just on treated?
+********************************************************************************
+********************************************************************************
+** PROPENSITY SCORE MATCHING EXPLORATION
+********************************************************************************
+********************************************************************************
+********************************************************************************
+* First, do some sample things
+// want to observe in relatively early year of relationship
+bysort unique_id partner_id: egen min_dur = min(relationship_duration)
+tab min_dur, m // 90% observed by second year. Should I drop if above that?
+
+keep if min_dur <=5
+
+// for treated, need to observe at least one year in each state
+tab years_observed treated, m
+tab years_married treated, m
+tab years_cohab treated, m
+
+browse unique_id partner_id survey_yr marital_status_updated treated relationship_duration year_transitioned years_observed years_married years_cohab
+keep if treated==0 | (treated==1 & years_married>=1 & years_married!=. & years_cohab>=1 & years_cohab!=.)
+
+// for control, do we want to restrict to min of 2 years? or is one sufficient? 
+// (I am loosely following Kapelle and she says just one valid wealth wave is needed)
+
+********************************************************************************
+**# Preliminary PSM (this is very crude)
+********************************************************************************
+// prob want to use characteristics at relationship start, which is relationship_duration==0 for both
+
+// if missing on ANY, cannot estimate. see how much of a problem this is. Particularly worried about off years. Does min dur work because it is definitely a year I observed? Or could it be during an off year so I should adjust?
+// okay education wife has the most at around 10%. then education husband and housework have like 5%. Come back to this...
+inspect educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed sample_type AGE_HEAD_ AGE_WIFE_ ft_pt_t1_head ft_pt_t1_wife couple_earnings_t1 housework_head housework_wife home_owner NUM_CHILDREN_ rel_start_all if relationship_duration==min_dur
+
+logit treated i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed i.sample_type AGE_HEAD_ AGE_WIFE_ i.ft_pt_t1_head i.ft_pt_t1_wife couple_earnings_t1 housework_head housework_wife i.home_owner NUM_CHILDREN_ rel_start_all if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed. will decide if want to restrict min dur
+predict psm if relationship_duration==min_dur
+
+// alt estimator
+// pscore treated educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ i.ft_pt_t1_head i.ft_pt_t1_wife couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur, pscore(psm_alt) logit 
+
+bysort unique_id partner_id: egen pscore = max(psm) // here there is about 20% missing
+sort unique_id partner_id survey_yr
+browse unique_id partner_id relationship_duration psm pscore min_dur educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr
+
+// check for overlap
+tabstat psm, by(treated)
+sum psm if treated==0, det
+sum psm if treated==1, det
+tabstat pscore, by(treated)
+
+set scheme cleanplots
+twoway (histogram psm if treated==1, width(.02) color(pink%30)) (histogram psm if treated==0, width(.02) color(gs8%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle("Propensity Score")
+twoway (histogram pscore if treated==1, width(.02) color(blue%30)) (histogram pscore if treated==0, width(.02) color(red%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6))
+
+browse treated psm educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==0
+
+// for now, estimate female_earn_pct_t female_hours_pct_t year_transitioned?? BUT how do I get the control group? do I need to do this by duration?
+tabstat female_hours_pct_t, by(treated)
+
+// teffects psmatch (re78) (treat age agesq agecube educ edusq marr nodegree black hisp re74 re75 u74 u75 interaction1, logit), atet gen(pstub_cps) nn(5) // atet = aTT caliper(0.1)
+
+********************************************************************************
+**# Option 1a: Use PSMATCH2 to match AT BASELINE
+********************************************************************************
+// I am just playing around. I really want to match at baseline, but want to see how this works / what sort of outputs I get
+// YES this is what I want because I get the IDs of the matches, so I can then use their transition duration
+psmatch2 treated, pscore(psm) // psm is just at min dur; pscore is where I filled it in for all durs based on that. SO, using psm IS matching at baseline (I think)
+sort _id
+browse unique_id partner_id treated psm pscore rel_start_yr relationship_duration min_dur year_transitioned duration_cohab dur transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _nn _pdif _Unique if _treated!=.
+// In retrospect - if min dur is on an off survey year, aka a lot of missing, should I update? Or did I only use full survey years? I want to reduce the amount of missing in the PSM
+// okay duh only the treated get matches
+// syntax from help file:
+// sort _id
+// g x_of_match = x[_n1]
+
+/* 
+// nearest neighbor matching
+psmatch2 treated, pscore(psm) neighbor(5) 
+browse unique_id treated psm pscore rel_start_yr min_dur marr_trans ever_transition year_transitioned transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _n2 _n3 _n4 _n5 _nn _pdif _Unique
+browse unique_id partner_id treated psm pscore rel_start_yr min_dur marr_trans ever_transition year_transitioned transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _n2 _n3 _n4 _n5 _nn _pdif _Unique if _treated!=.
+*/
+
+tab _weight treated
+tab treated _nn if relationship_duration == min_dur, m
+
+sort unique_id partner_id relationship_duration
+browse unique_id partner_id survey_yr marital_status_updated treated psm pscore rel_start_yr relationship_duration min_dur year_transitioned duration_cohab dur transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _nn _pdif _Unique ///
+if inlist(unique_id, 1762033, 5858039, 5812009, 2252031, 2067173, 2067173, 2067173, 808030, 5853006, 5035002, 5940031, 351035, 931031, 2053030, 1302035, 2509030)
+// if inlist(_id, 32, 154, 1152, 1762, 2224, 2224, 2224, 2291, 2303, 2315, 2572, 2926, 3387, 3388, 3389, 3570) // they get a different ID for each duration, so if I want to view all rows, need to use unique
+
+// let's create a lookup file of ids for the controls
+preserve
+
+keep _id unique_id partner_id rel_start_all min_dur years_observed
+rename _id _n1
+rename unique_id matched_unique_id
+rename partner_id matched_partner_id
+rename rel_start_all matched_rel_start
+rename min_dur matched_min_dur
+rename years_observed matched_years_obs
+
+save "$temp/psm_id_lookup.dta", replace
+
+restore
+
+// now merge on the control info
+merge m:1 _n1 using "$temp/psm_id_lookup.dta"
+drop if _merge==2
+drop _merge
+
+sort unique_id partner_id survey_yr
+browse unique_id partner_id survey_yr treated rel_start_all relationship_duration  min_dur years_observed _id _n1 matched_unique_id matched_partner_id matched_rel_start matched_min_dur matched_years_obs
+
+bysort unique_id partner_id (matched_unique_id): replace matched_unique_id = matched_unique_id[1]
+bysort unique_id partner_id (matched_partner_id): replace matched_partner_id = matched_partner_id[1]
+bysort unique_id partner_id (matched_rel_start): replace matched_rel_start = matched_rel_start[1]
+bysort unique_id partner_id (matched_min_dur): replace matched_min_dur = matched_min_dur[1]
+bysort unique_id partner_id (matched_years_obs): replace matched_years_obs = matched_years_obs[1]
+
+// going to attempt to rescale all durations so start at min dur and just increment 1 - to make control and treated match
+sort unique_id partner_id relationship_duration
+
+gen relationship_counter=.
+replace relationship_counter = 0 if relationship_duration == min_dur
+replace relationship_counter = relationship_counter[_n-1] + 1 if relationship_counter==. & unique_id == unique_id[_n-1] & partner_id == partner_id[_n-1]
+tab relationship_counter, m
+
+gen transition_counter=.
+replace transition_counter = relationship_counter if relationship_duration == dur_transitioned
+bysort unique_id partner_id (transition_counter): replace transition_counter = transition_counter[1]
+
+browse unique_id partner_id survey_yr rel_start_all relationship_duration relationship_counter transition_counter year_transitioned dur_transitioned
+
+save "$temp/PSID_psm_dataset.dta", replace // save here so I can start to create a lookup file
+
+**************************************
+* Now create treated only version
+**************************************
+keep if treated==1
+
+//do they all have matches?
+inspect matched_unique_id // okay no lolz
+inspect pscore // okay, it's people that don't have propensity score, probably bc of missing data
+
+drop if matched_unique_id==.
+
+browse unique_id partner_id survey_yr rel_start_all relationship_duration  min_dur years_observed _id _n1 _nn matched_unique_id matched_partner_id matched_rel_start matched_min_dur matched_years_obs
+
+save "$temp/PSID_psm_treated.dta", replace  // will use this as base, then add control info, then resave
+
+**************************************
+* Now clean up full file for matching
+**************************************
+use "$temp/PSID_psm_dataset.dta", clear
+
+keep unique_id partner_id relationship_counter relationship_duration female_earn_pct_t female_hours_pct_t wife_housework_pct_t
+
+rename unique_id matched_unique_id
+rename partner_id matched_partner_id
+rename relationship_duration matched_true_dur
+rename female_earn_pct_t matched_earn_pct
+rename female_hours_pct_t matched_hours_pct
+rename wife_housework_pct_t matched_hw_pct
+
+save "$temp/PSID_psm_tomatch.dta", replace
+
+**************************************
+* Merge partner info
+**************************************
+use "$temp/PSID_psm_treated.dta", clear
+
+merge m:1 matched_unique_id matched_partner_id relationship_counter using "$temp/PSID_psm_tomatch.dta" // some people have same id, so it's not 1:1 in master
+drop if _merge==2
+
+tab _merge // okay, not a lot of matched. so some fo this is because cohab is shorter. but need to figure out how many have NO matching records at all...
+egen ever_match = max(_merge)
+tab ever_match, m // okay, so they all have at least one matching record. if none, max would be 1, so this would be bad
+egen all_match = min(_merge) // do any match ALL records?
+tab all_match, m // lol NO
+
+gen has_control = 0 if _merge==1
+replace has_control = 1 if _merge==3
+drop _merge
+
+sort unique_id partner_id relationship_counter
+
+browse unique_id partner_id survey_yr rel_start_all relationship_counter relationship_duration _merge matched_unique_id matched_partner_id matched_rel_start matched_years_obs matched_true_dur female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct matched_hours_pct matched_hw_pct
+
+save "$created_data/PSID_psm_matched.dta", replace
+
+**************************************
+* Preliminary analysis
+**************************************
+tab relationship_counter has_control, m
+drop if relationship_counter >=10 // very few records and matches
+
+browse unique_id partner_id survey_yr rel_start_all relationship_counter transition_counter matched_unique_id matched_partner_id matched_rel_start matched_years_obs matched_true_dur female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct matched_hours_pct matched_hw_pct
+
+gen duration_centered = relationship_counter - transition_counter
+
+preserve
+
+collapse (median) female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct matched_hours_pct matched_hw_pct, by(duration_centered)
+
+twoway (line female_earn_pct_t duration_centered if duration_centered>=-5) (line matched_earn_pct duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle(`"Duration from Marital Transition"')
+
+twoway (line female_hours_pct_t duration_centered if duration_centered>=-5) (line matched_hours_pct duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle(`"Duration from Marital Transition"')
+
+twoway (line wife_housework_pct_t duration_centered if duration_centered>=-5) (line matched_hw_pct duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle(`"Duration from Marital Transition"')
+
+restore
+
+**************************************
+* Actual analysis
+**************************************
+* Need to get these stacked instead of next to each other, so can create a column for treatment and interact, like I do below...do I have to cut, rename, and append?
+ 
+********************************************************************************
+**# Option 1b: keep groups of same length and recenter control, then weight?!
+* Using IPW based on PSM above?
+********************************************************************************
+// okay, so need to start over with original file, so figure out how to make this happen...
+
+gen keep_flag=0
+replace keep_flag = 1 if treated==1 & dur >=-2 & dur<=4 & years_observed>=4
+replace keep_flag = 1 if treated==0 & dur>=0 & dur<=6 & years_observed>=4
+
+unique unique_id if keep_flag==1, by(treated)
+tab dur treated if keep_flag==1
+
+gen recenter_dur = dur if treated==1
+replace recenter_dur = dur - 2 if treated==0
+
+tab recenter_dur treated if keep_flag==1, m
+
+gen recenter_dur_pos = recenter_dur+3
+
+gen ipw=.
+replace ipw=1/pscore if treated==1
+replace ipw=1/(1-pscore) if treated==0
+
+browse unique_id partner_id treated recenter_dur pscore ipw psm female_earn_pct_t female_hours_pct_t wife_housework_pct_t if keep_flag==1
+
+tabstat pscore ipw, by(treated)
+
+keep if keep_flag==1
+
+gen earn_weight_treat = 0
+replace earn_weight_treat = female_earn_pct_t*ipw if treated==1
+gen earn_weight_control = 0
+replace earn_weight_control = female_earn_pct_t*ipw if treated==0
+
+tabstat earn_weight_treat earn_weight_control if keep_flag==1, by(recenter_dur) // I don't think any of this is right lol
+
+set scheme cleanplots
+
+// unadjusted
+regress female_earn_pct_t treated##i.recenter_dur_pos 
+margins recenter_dur_pos#treated
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+regress female_hours_pct_t treated##i.recenter_dur_pos 
+margins recenter_dur_pos#treated
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+regress wife_housework_pct_t treated##i.recenter_dur_pos 
+margins recenter_dur_pos#treated
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+// adjusted
+local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
+
+* (by interacting with duration, is this essentially the dummy impact function discussed by Ludwig and Bruderl? in my head, yes, so I actually did something right... but they don't use treatment / control; they just use within couple fixed-effects, so it's like my previous approach, but...different...)
+regress female_earn_pct_t treated##i.recenter_dur_pos `controls' [pweight=ipw] 
+margins recenter_dur_pos#treated // does this work?? like is it this simple?
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
+
+regress female_hours_pct_t treated##i.recenter_dur_pos  `controls' [pweight=ipw]
+margins recenter_dur_pos#treated // does this work??
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
+
+regress wife_housework_pct_t treated##i.recenter_dur_pos `controls'  [pweight=ipw]
+margins recenter_dur_pos#treated // does this work??
+marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")  plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
+
+// teffects instead
+teffects ipwra (wife_housework_pct_t i.recenter_dur_pos) ///
+ (treated i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr, probit), atet osample(overlap)
+ 
+tebalance summarize
+
+** descriptive (not weighted)
+preserve
+
+collapse (median) female_earn_pct_t female_hours_pct_t wife_housework_pct_t if keep_flag==1, by(recenter_dur treated)
+
+// paid labor: compare the two
+twoway (line female_earn_pct_t recenter_dur if treated==0) (line female_earn_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
+
+// paid labor: compare the two
+twoway (line female_hours_pct_t recenter_dur if treated==0) (line female_hours_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
+
+// unpaid labor: compare the two
+twoway (line wife_housework_pct_t recenter_dur if treated==0) (line wife_housework_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
+
+// one way to plot it all, don't like this
+twoway (line female_earn_pct_t recenter_dur) (line wife_housework_pct_t recenter_dur, yaxis(2)), legend(order(1 "Paid Labor" 2 "Unpaid Labor") rows(1) position(6)) xtitle(`"Duration from Marital Transition"') ytitle(`"Paid Labor"') ylabel(, valuelabel) ytitle(`"Unpaid Labor"', axis(2)) by(treated)
+
+restore
+
+********************************************************************************
+**# Option 1c: Use PSM as time-varying covariate (see Kupzyk and Beal)
+* want to see how different this is from using PSM as a weight instead (as above)
+********************************************************************************
+
+********************************************************************************
+********************************************************************************
+********************************************************************************
+** FIXED EFFECTS EXPLORATION
+********************************************************************************
+********************************************************************************
+********************************************************************************
+
+// think I need to move this to a new file because will need to start these steps over with full file? idk let's see
+
+********************************************************************************
+**# Option 2: fixed effects just on treated?
 ********************************************************************************
 // so first need a var that is pre v. post treated. can I just use marital status?
-egen couple_id = group(unique_id partner_id)
- 
 tab marital_status_updated treated, m
 tab year_transitioned treated, m
 tab marital_status_updated if treated==1 & survey_yr >= year_transitioned
@@ -396,127 +706,3 @@ margins married
 
 xtreg wife_housework_pct_t i.married i.relationship_duration `controls' if treated==1 & relationship_duration<=15, fe
 margins married
-
-********************************************************************************
-**# Preliminary PSM (this is very crude)
-********************************************************************************
-// prob want to use characteristics at relationship start, which is relationship_duration==0 for both
-bysort unique_id partner_id: egen min_dur = min(relationship_duration)
-tab min_dur, m // 90% observed in first year
-
-logit treated i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed i.sample_type AGE_HEAD_ AGE_WIFE_ i.ft_pt_t1_head i.ft_pt_t1_wife couple_earnings_t1 housework_head housework_wife i.home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur // PSM based on characteristics at start of cohab OR first observed
-predict psm if relationship_duration==min_dur
-
-// alt estimator
-// pscore treated educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ i.ft_pt_t1_head i.ft_pt_t1_wife couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==min_dur, pscore(psm_alt) logit 
-
-bysort unique_id partner_id: egen pscore = max(psm)
-sort unique_id partner_id survey_yr
-browse unique_id partner_id relationship_duration psm pscore min_dur educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr
-
-// check for overlap
-tabstat psm, by(treated)
-sum psm if treated==0, det
-sum psm if treated==1, det
-tabstat pscore, by(treated)
-
-set scheme cleanplots
-twoway (histogram psm if treated==1, width(.02) color(pink%30)) (histogram psm if treated==0, width(.02) color(gs8%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle("Propensity Score")
-twoway (histogram pscore if treated==1, width(.02) color(blue%30)) (histogram pscore if treated==0, width(.02) color(red%30)),  legend(order(1 "Treated" 2 "Control") rows(1) position(6))
-
-browse treated psm educ_head_est educ_wife_est raceth_head_fixed raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr if relationship_duration==0
-
-// for now, estimate female_earn_pct_t female_hours_pct_t year_transitioned?? BUT how do I get the control group? do I need to do this by duration?
-tabstat female_hours_pct_t, by(treated)
-
-// teffects psmatch (re78) (treat age agesq agecube educ edusq marr nodegree black hisp re74 re75 u74 u75 interaction1, logit), atet gen(pstub_cps) nn(5) // atet = aTT caliper(0.1)
-
-********************************************************************************
-**# Option 2: keep groups of same length and recenter control, then weight?!
-* Using IPW based on PSM above?
-********************************************************************************
-gen keep_flag=0
-replace keep_flag = 1 if treated==1 & dur >=-2 & dur<=4 & years_observed>=4
-replace keep_flag = 1 if treated==0 & dur>=0 & dur<=6 & years_observed>=4
-
-unique unique_id if keep_flag==1, by(treated)
-tab dur treated if keep_flag==1
-
-gen recenter_dur = dur if treated==1
-replace recenter_dur = dur - 2 if treated==0
-
-tab recenter_dur treated if keep_flag==1, m
-
-gen recenter_dur_pos = recenter_dur+3
-
-gen ipw=.
-replace ipw=1/pscore if treated==1
-replace ipw=1/(1-pscore) if treated==0
-
-browse unique_id partner_id treated recenter_dur pscore ipw psm female_earn_pct_t female_hours_pct_t wife_housework_pct_t if keep_flag==1
-
-tabstat pscore ipw, by(treated)
-
-keep if keep_flag==1
-
-gen earn_weight_treat = 0
-replace earn_weight_treat = female_earn_pct_t*ipw if treated==1
-gen earn_weight_control = 0
-replace earn_weight_control = female_earn_pct_t*ipw if treated==0
-
-tabstat earn_weight_treat earn_weight_control if keep_flag==1, by(recenter_dur) // I don't think any of this is right lol
-
-set scheme cleanplots
-
-// unadjusted
-regress female_earn_pct_t treated##i.recenter_dur_pos 
-margins recenter_dur_pos#treated
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
-
-regress female_hours_pct_t treated##i.recenter_dur_pos 
-margins recenter_dur_pos#treated
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
-
-regress wife_housework_pct_t treated##i.recenter_dur_pos 
-margins recenter_dur_pos#treated
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
-
-// adjusted
-local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
-
-regress female_earn_pct_t treated##i.recenter_dur_pos `controls' [pweight=ipw]
-margins recenter_dur_pos#treated // does this work?? like is it this simple?
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
-
-regress female_hours_pct_t treated##i.recenter_dur_pos  `controls' [pweight=ipw]
-margins recenter_dur_pos#treated // does this work??
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
-
-regress wife_housework_pct_t treated##i.recenter_dur_pos `controls'  [pweight=ipw]
-margins recenter_dur_pos#treated // does this work??
-marginsplot, xlabel(1 "-2" 2 "-1" 3 "Transition" 4 "1" 5 "2" 6 "3" 7 "4") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")  plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
-
-// teffects instead
-teffects ipwra (wife_housework_pct_t i.recenter_dur_pos) ///
- (treated i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr, probit), atet osample(overlap)
- 
-tebalance summarize
-
-** descriptive (not weighted)
-preserve
-
-collapse (median) female_earn_pct_t female_hours_pct_t wife_housework_pct_t if keep_flag==1, by(recenter_dur treated)
-
-// paid labor: compare the two
-twoway (line female_earn_pct_t recenter_dur if treated==0) (line female_earn_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
-
-// paid labor: compare the two
-twoway (line female_hours_pct_t recenter_dur if treated==0) (line female_hours_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
-
-// unpaid labor: compare the two
-twoway (line wife_housework_pct_t recenter_dur if treated==0) (line wife_housework_pct_t recenter_dur if treated==1), legend(order(1 "Cohab" 2 "Transitioned") rows(1) position(6)) xtitle(`"recenter_duration from Marital Transition"')
-
-// one way to plot it all, don't like this
-twoway (line female_earn_pct_t recenter_dur) (line wife_housework_pct_t recenter_dur, yaxis(2)), legend(order(1 "Paid Labor" 2 "Unpaid Labor") rows(1) position(6)) xtitle(`"Duration from Marital Transition"') ytitle(`"Paid Labor"') ylabel(, valuelabel) ytitle(`"Unpaid Labor"', axis(2)) by(treated)
-
-restore
