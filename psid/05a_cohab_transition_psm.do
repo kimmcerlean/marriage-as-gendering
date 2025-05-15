@@ -535,6 +535,59 @@ restore
 * Actual analysis
 **************************************
 * Need to get these stacked instead of next to each other, so can create a column for treatment and interact, like I do below...do I have to cut, rename, and append?
+* Yeah, definitely will need to add other characteristics so can control? Or is that all taken care of in propensity score anyway?
+* Think I do also need to do more controls and include several (at least 5?) per treated so the sample sizes are larger (since the controls generally have shorter durations)
+
+browse unique_id partner_id survey_yr rel_start_all relationship_counter transition_counter duration_centered matched_unique_id matched_partner_id matched_rel_start matched_years_obs matched_true_dur female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct matched_hours_pct matched_hw_pct
+
+// get treated that I will then append control on to
+
+preserve
+
+keep unique_id partner_id survey_yr rel_start_all treated relationship_counter transition_counter duration_centered female_earn_pct_t female_hours_pct_t wife_housework_pct_t
+
+save "$temp/PSID_psm_base.dta", replace
+
+restore
+
+// get control
+
+preserve
+
+keep matched_unique_id matched_partner_id survey_yr matched_rel_start relationship_counter transition_counter duration_centered matched_earn_pct matched_hours_pct matched_hw_pct
+
+gen treated=0
+rename matched_unique_id unique_id
+rename matched_partner_id partner_id
+rename matched_rel_start rel_start_all
+rename matched_earn_pct female_earn_pct_t
+rename matched_hours_pct female_hours_pct_t
+rename matched_hw_pct wife_housework_pct_t
+
+save "$temp/PSID_psm_control.dta", replace
+
+restore
+
+// now append
+use "$temp/PSID_psm_base.dta", clear
+append using "$temp/PSID_psm_control.dta"
+
+keep if duration_centered>=-5 & duration_centered <=5
+gen duration_pos = duration_centered + 6 // can't be negative
+
+// unadjusted
+regress female_earn_pct_t treated##i.duration_pos
+margins duration_pos#treated
+marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+regress female_hours_pct_t treated##i.duration_pos
+margins duration_pos#treated
+marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+regress wife_housework_pct_t treated##i.duration_pos
+margins duration_pos#treated
+marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
  
 ********************************************************************************
 **# Option 1b: keep groups of same length and recenter control, then weight?!
@@ -634,75 +687,3 @@ restore
 * want to see how different this is from using PSM as a weight instead (as above)
 ********************************************************************************
 
-********************************************************************************
-********************************************************************************
-********************************************************************************
-** FIXED EFFECTS EXPLORATION
-********************************************************************************
-********************************************************************************
-********************************************************************************
-
-// think I need to move this to a new file because will need to start these steps over with full file? idk let's see
-
-********************************************************************************
-**# Option 2: fixed effects just on treated?
-********************************************************************************
-// so first need a var that is pre v. post treated. can I just use marital status?
-tab marital_status_updated treated, m
-tab year_transitioned treated, m
-tab marital_status_updated if treated==1 & survey_yr >= year_transitioned
-
-browse unique_id partner_id survey_yr marital_status_updated treated marr_trans year_transitioned // so treated transition_flag and ever_transition are the same thing at this point
-
-gen married = 0
-replace married = 1 if marital_status_updated==1
-
-tabstat female_earn_pct_t female_hours_pct_t wife_housework_pct_t if treated==1, by(married) // without controls, this is what I'd be estimating? yes
-regress female_earn_pct_t i.married if treated==1
-regress female_hours_pct_t i.married if treated==1
-regress wife_housework_pct_t i.married if treated==1
-
-ttest female_earn_pct_t if treated==1, by(married) // also same as regression
-ttest female_hours_pct_t if treated==1, by(married) // also same as regression
-ttest wife_housework_pct_t if treated==1, by(married) // also same as regression
-
-local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
-regress female_earn_pct_t i.married `controls' if treated==1
-margins married
-regress female_earn_pct_t i.married `controls' i.couple_id if treated==1
-margins married
-
-xtset couple_id
-xtreg female_earn_pct_t i.married if treated==1, fe // this exactly matches above
-margins married
-
-regress female_earn_pct_t i.married i.relationship_duration `controls' i.couple_id if treated==1
-margins married
-
-local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
-
-xtreg female_earn_pct_t i.married i.relationship_duration `controls' if treated==1, fe
-margins married
-margins relationship_duration
-marginsplot
-
-xtreg female_earn_pct_t i.married dur `controls' if treated==1, fe
-margins married
-margins, at(dur=(-5(1)10))
-marginsplot
-
-xtreg female_earn_pct_t i.married##i.relationship_duration `controls' if treated==1, fe
-margins married
-margins married, at(relationship_duration=(0(1)10))
-marginsplot
-
-local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
-// do I use controls with fixed effects? I think because that controls for observed and the remained is unobserved? I think controls let hyou control for time-varying things whereas fixed effects net out time invariant? (hence why race is collinear?)
-xtreg female_earn_pct_t i.married i.relationship_duration `controls' if treated==1 & relationship_duration<=15, fe
-margins married
-
-xtreg female_hours_pct_t i.married i.relationship_duration `controls' if treated==1 & relationship_duration<=15, fe
-margins married
-
-xtreg wife_housework_pct_t i.married i.relationship_duration `controls' if treated==1 & relationship_duration<=15, fe
-margins married
