@@ -34,5 +34,6 @@ global temp "$homedir/temp data/psid"
 global results "$homedir/results/psid" 
 
 ssc install psmatch2, replace
+ssc install xtfeis, replace
 
 set seed 8675309
