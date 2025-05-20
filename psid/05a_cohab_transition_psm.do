@@ -385,58 +385,78 @@ tabstat female_hours_pct_t, by(treated)
 ********************************************************************************
 // I am just playing around. I really want to match at baseline, but want to see how this works / what sort of outputs I get
 // YES this is what I want because I get the IDs of the matches, so I can then use their transition duration
+
+/*
+//
+Just one match/
 psmatch2 treated, pscore(psm) // psm is just at min dur; pscore is where I filled it in for all durs based on that. SO, using psm IS matching at baseline (I think)
 sort _id
 browse unique_id partner_id treated psm pscore rel_start_yr relationship_duration min_dur year_transitioned duration_cohab dur transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _nn _pdif _Unique if _treated!=.
-// In retrospect - if min dur is on an off survey year, aka a lot of missing, should I update? Or did I only use full survey years? I want to reduce the amount of missing in the PSM
-// okay duh only the treated get matches
-// syntax from help file:
-// sort _id
-// g x_of_match = x[_n1]
-
-/* 
-// nearest neighbor matching
-psmatch2 treated, pscore(psm) neighbor(5) 
-browse unique_id treated psm pscore rel_start_yr min_dur marr_trans ever_transition year_transitioned transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _n2 _n3 _n4 _n5 _nn _pdif _Unique
-browse unique_id partner_id treated psm pscore rel_start_yr min_dur marr_trans ever_transition year_transitioned transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _n2 _n3 _n4 _n5 _nn _pdif _Unique if _treated!=.
-*/
-
-tab _weight treated
-tab treated _nn if relationship_duration == min_dur, m
 
 sort unique_id partner_id relationship_duration
 browse unique_id partner_id survey_yr marital_status_updated treated psm pscore rel_start_yr relationship_duration min_dur year_transitioned duration_cohab dur transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _nn _pdif _Unique ///
 if inlist(unique_id, 1762033, 5858039, 5812009, 2252031, 2067173, 2067173, 2067173, 808030, 5853006, 5035002, 5940031, 351035, 931031, 2053030, 1302035, 2509030)
 // if inlist(_id, 32, 154, 1152, 1762, 2224, 2224, 2224, 2291, 2303, 2315, 2572, 2926, 3387, 3388, 3389, 3570) // they get a different ID for each duration, so if I want to view all rows, need to use unique
 
+// In retrospect - if min dur is on an off survey year, aka a lot of missing, should I update? Or did I only use full survey years? I want to reduce the amount of missing in the PSM
+// okay duh only the treated get matches
+// syntax from help file:
+// sort _id
+// g x_of_match = x[_n1]
+*/
+
+// nearest neighbor matching
+psmatch2 treated, pscore(psm) neighbor(5) 
+sort _id
+browse unique_id treated psm pscore rel_start_yr min_dur marr_trans ever_transition year_transitioned transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _n2 _n3 _n4 _n5 _nn _pdif _Unique
+browse unique_id partner_id treated psm pscore rel_start_yr min_dur marr_trans ever_transition year_transitioned transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _n2 _n3 _n4 _n5 _nn _pdif _Unique if _treated!=.
+
+tab _weight treated
+tab treated _nn if relationship_duration == min_dur, m
+
+sort unique_id partner_id relationship_duration
+browse unique_id partner_id survey_yr marital_status_updated treated psm pscore rel_start_yr relationship_duration min_dur year_transitioned duration_cohab dur transition_flag relationship_duration _pscore _treated _support _weight _id _n1 _n2 _n3 _n4 _n5 _nn _pdif _Unique ///
+if inlist(unique_id, 5031, 498002, 1538174, 1644031, 1776004, 1807030, 2890030, 3368007, 5002005, 5171006, 6062003, 6750032)
+
 // let's create a lookup file of ids for the controls
 preserve
 
 keep _id unique_id partner_id rel_start_all min_dur years_observed
 rename _id _n1
+gen _n2 = _n1
+gen _n3 = _n1
+gen _n4 = _n1
+gen _n5 = _n1
 rename unique_id matched_unique_id
 rename partner_id matched_partner_id
 rename rel_start_all matched_rel_start
 rename min_dur matched_min_dur
 rename years_observed matched_years_obs
 
-save "$temp/psm_id_lookup.dta", replace
+// save "$temp/psm_id_lookup.dta", replace // file for just 1 control match
+save "$temp/psm_id_lookup_nn5.dta", replace
 
 restore
 
 // now merge on the control info
-merge m:1 _n1 using "$temp/psm_id_lookup.dta"
-drop if _merge==2
-drop _merge
+*Try to make this a loop through the 5 (_n1 to _n5)
+forvalues n=1/5{
+	merge m:1 _n`n' using "$temp/psm_id_lookup_nn5.dta"
+	drop if _merge==2
+	drop _merge
+	
+	rename (matched_unique_id matched_partner_id matched_rel_start matched_min_dur matched_years_obs) ///
+	(matched_unique_id`n' matched_partner_id`n' matched_rel_start`n' matched_min_dur`n' matched_years_obs`n')
+
+	bysort unique_id partner_id (matched_unique_id`n'): 	replace matched_unique_id`n' = matched_unique_id`n'[1]
+	bysort unique_id partner_id (matched_partner_id`n'): 	replace matched_partner_id`n' = matched_partner_id`n'[1]
+	bysort unique_id partner_id (matched_rel_start`n'): 	replace matched_rel_start`n' = matched_rel_start`n'[1]
+	bysort unique_id partner_id (matched_min_dur`n'): 		replace matched_min_dur`n' = matched_min_dur`n'[1]
+	bysort unique_id partner_id (matched_years_obs`n'): 	replace matched_years_obs`n' = matched_years_obs`n'[1]
+}
 
 sort unique_id partner_id survey_yr
-browse unique_id partner_id survey_yr treated rel_start_all relationship_duration  min_dur years_observed _id _n1 matched_unique_id matched_partner_id matched_rel_start matched_min_dur matched_years_obs
-
-bysort unique_id partner_id (matched_unique_id): replace matched_unique_id = matched_unique_id[1]
-bysort unique_id partner_id (matched_partner_id): replace matched_partner_id = matched_partner_id[1]
-bysort unique_id partner_id (matched_rel_start): replace matched_rel_start = matched_rel_start[1]
-bysort unique_id partner_id (matched_min_dur): replace matched_min_dur = matched_min_dur[1]
-bysort unique_id partner_id (matched_years_obs): replace matched_years_obs = matched_years_obs[1]
+browse unique_id partner_id survey_yr treated rel_start_all relationship_duration  min_dur years_observed _id _n* matched_unique_id* matched_partner_id* matched_rel_start* matched_min_dur* matched_years_obs*
 
 // going to attempt to rescale all durations so start at min dur and just increment 1 - to make control and treated match
 sort unique_id partner_id relationship_duration
@@ -452,7 +472,8 @@ bysort unique_id partner_id (transition_counter): replace transition_counter = t
 
 browse unique_id partner_id survey_yr rel_start_all relationship_duration relationship_counter transition_counter year_transitioned dur_transitioned
 
-save "$temp/PSID_psm_dataset.dta", replace // save here so I can start to create a lookup file
+save "$temp/PSID_psm_dataset_nn5.dta", replace // save here so I can start to create a lookup file
+// save "$temp/PSID_psm_dataset.dta", replace // file for just 1 control match
 
 **************************************
 * Now create treated only version
@@ -460,28 +481,32 @@ save "$temp/PSID_psm_dataset.dta", replace // save here so I can start to create
 keep if treated==1
 
 //do they all have matches?
-inspect matched_unique_id // okay no lolz
+inspect matched_unique_id* // okay no lolz
 inspect pscore // okay, it's people that don't have propensity score, probably bc of missing data
 
-drop if matched_unique_id==.
+drop if matched_unique_id1==.
 
-browse unique_id partner_id survey_yr rel_start_all relationship_duration  min_dur years_observed _id _n1 _nn matched_unique_id matched_partner_id matched_rel_start matched_min_dur matched_years_obs
+browse unique_id partner_id survey_yr rel_start_all relationship_duration  min_dur years_observed _id _n* _nn matched_unique_id* matched_partner_id* matched_rel_start* matched_min_dur* matched_years_obs*
 
 save "$temp/PSID_psm_treated.dta", replace  // will use this as base, then add control info, then resave
 
 **************************************
 * Now clean up full file for matching
 **************************************
-use "$temp/PSID_psm_dataset.dta", clear
+use "$temp/PSID_psm_dataset_nn5.dta", clear
 
 keep unique_id partner_id relationship_counter relationship_duration female_earn_pct_t female_hours_pct_t wife_housework_pct_t
 
-rename unique_id matched_unique_id
-rename partner_id matched_partner_id
-rename relationship_duration matched_true_dur
-rename female_earn_pct_t matched_earn_pct
-rename female_hours_pct_t matched_hours_pct
-rename wife_housework_pct_t matched_hw_pct
+forvalues n=1/5{
+	gen matched_unique_id`n' = unique_id
+	gen matched_partner_id`n' = partner_id
+	gen matched_true_dur`n' = relationship_duration
+	gen matched_earn_pct`n' = female_earn_pct_t
+	gen matched_hours_pct`n' = female_hours_pct_t
+	gen matched_hw_pct`n' = wife_housework_pct_t
+}
+
+drop unique_id partner_id relationship_duration female_earn_pct_t female_hours_pct_t wife_housework_pct_t
 
 save "$temp/PSID_psm_tomatch.dta", replace
 
@@ -490,55 +515,61 @@ save "$temp/PSID_psm_tomatch.dta", replace
 **************************************
 use "$temp/PSID_psm_treated.dta", clear
 
-merge m:1 matched_unique_id matched_partner_id relationship_counter using "$temp/PSID_psm_tomatch.dta" // some people have same id, so it's not 1:1 in master
-drop if _merge==2
+forvalues n=1/5{
+	merge m:1 matched_unique_id`n' matched_partner_id`n' relationship_counter using "$temp/PSID_psm_tomatch.dta", ///
+	keepusing(matched_true_dur`n' matched_earn_pct`n' matched_hours_pct`n' matched_hw_pct`n') // some people have same id, so it's not 1:1 in master
+	drop if _merge==2
 
-tab _merge // okay, not a lot of matched. so some fo this is because cohab is shorter. but need to figure out how many have NO matching records at all...
-egen ever_match = max(_merge)
-tab ever_match, m // okay, so they all have at least one matching record. if none, max would be 1, so this would be bad
-egen all_match = min(_merge) // do any match ALL records?
-tab all_match, m // lol NO
+	tab _merge // okay, not a lot of matched. so some fo this is because cohab is shorter. but need to figure out how many have NO matching records at all...
+	egen ever_match`n' = max(_merge)
+	tab ever_match`n', m // okay, so they all have at least one matching record. if none, max would be 1, so this would be bad
+	egen all_match`n' = min(_merge) // do any match ALL records?
+	tab all_match`n', m // lol NO
 
-gen has_control = 0 if _merge==1
-replace has_control = 1 if _merge==3
-drop _merge
+	gen has_control`n' = 0 if _merge==1
+	replace has_control`n' = 1 if _merge==3
+	drop _merge
+}
+
 
 sort unique_id partner_id relationship_counter
 
-browse unique_id partner_id survey_yr rel_start_all relationship_counter relationship_duration _merge matched_unique_id matched_partner_id matched_rel_start matched_years_obs matched_true_dur female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct matched_hours_pct matched_hw_pct
+browse unique_id partner_id survey_yr rel_start_all relationship_counter relationship_duration has_control* matched_unique_id* matched_partner_id* matched_rel_start* matched_years_obs* matched_true_dur* female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct* matched_hours_pct* matched_hw_pct*
 
 save "$created_data/PSID_psm_matched.dta", replace
+
 
 **************************************
 * Preliminary analysis
 **************************************
-tab relationship_counter has_control, m
-drop if relationship_counter >=10 // very few records and matches
+tab relationship_counter has_control1, m
+drop if relationship_counter >=10 // very few records and matches. might even need to remove more than that
 
-browse unique_id partner_id survey_yr rel_start_all relationship_counter transition_counter matched_unique_id matched_partner_id matched_rel_start matched_years_obs matched_true_dur female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct matched_hours_pct matched_hw_pct
+browse unique_id partner_id survey_yr rel_start_all relationship_counter transition_counter matched_unique_id* matched_partner_id* matched_rel_start* matched_years_obs* matched_true_dur* female_earn_pct_t* female_hours_pct_t* wife_housework_pct_t* matched_earn_pct* matched_hours_pct* matched_hw_pct*
 
 gen duration_centered = relationship_counter - transition_counter
 
 preserve
 
-collapse (median) female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct matched_hours_pct matched_hw_pct, by(duration_centered)
+collapse (median) female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct* matched_hours_pct* matched_hw_pct*, by(duration_centered)
 
-twoway (line female_earn_pct_t duration_centered if duration_centered>=-5) (line matched_earn_pct duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle(`"Duration from Marital Transition"')
+twoway (line female_earn_pct_t duration_centered if duration_centered>=-5) (line matched_earn_pct* duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control1" 3 "Control2" 4 "Control3" 5 "Control4" 6 "Control5")) xtitle(`"Duration from Marital Transition"') // rows(1) position(6) - old legend characteristics
 
-twoway (line female_hours_pct_t duration_centered if duration_centered>=-5) (line matched_hours_pct duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle(`"Duration from Marital Transition"')
+twoway (line female_hours_pct_t duration_centered if duration_centered>=-5) (line matched_hours_pct* duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control1" 3 "Control2" 4 "Control3" 5 "Control4" 6 "Control5")) xtitle(`"Duration from Marital Transition"')
 
-twoway (line wife_housework_pct_t duration_centered if duration_centered>=-5) (line matched_hw_pct duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control") rows(1) position(6)) xtitle(`"Duration from Marital Transition"')
+twoway (line wife_housework_pct_t duration_centered if duration_centered>=-5) (line matched_hw_pct* duration_centered if duration_centered>=-5), legend(order(1 "Treated" 2 "Control1" 3 "Control2" 4 "Control3" 5 "Control4" 6 "Control5")) xtitle(`"Duration from Marital Transition"')
 
 restore
 
+
 **************************************
-* Actual analysis
+**# * Actual analysis with matched data
 **************************************
 * Need to get these stacked instead of next to each other, so can create a column for treatment and interact, like I do below...do I have to cut, rename, and append?
 * Yeah, definitely will need to add other characteristics so can control? Or is that all taken care of in propensity score anyway?
 * Think I do also need to do more controls and include several (at least 5?) per treated so the sample sizes are larger (since the controls generally have shorter durations)
 
-browse unique_id partner_id survey_yr rel_start_all relationship_counter transition_counter duration_centered matched_unique_id matched_partner_id matched_rel_start matched_years_obs matched_true_dur female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct matched_hours_pct matched_hw_pct
+browse unique_id partner_id survey_yr rel_start_all relationship_counter transition_counter duration_centered matched_unique_id* matched_partner_id* matched_rel_start* matched_years_obs* matched_true_dur* female_earn_pct_t female_hours_pct_t wife_housework_pct_t matched_earn_pct* matched_hours_pct* matched_hw_pct*
 
 // get treated that I will then append control on to
 
@@ -546,36 +577,49 @@ preserve
 
 keep unique_id partner_id survey_yr rel_start_all treated relationship_counter transition_counter duration_centered female_earn_pct_t female_hours_pct_t wife_housework_pct_t
 
+// create variables that I'll add to the control ones
+gen control_n=.
+gen treated_unique=.
+gen treated_partner=.
+
 save "$temp/PSID_psm_base.dta", replace
 
 restore
 
 // get control
 
-preserve
+forvalues n=1/5{
+	
+	preserve
 
-keep matched_unique_id matched_partner_id survey_yr matched_rel_start relationship_counter transition_counter duration_centered matched_earn_pct matched_hours_pct matched_hw_pct
+	keep unique_id partner_id matched_unique_id`n' matched_partner_id`n' survey_yr matched_rel_start`n' relationship_counter transition_counter duration_centered matched_earn_pct`n' matched_hours_pct`n' matched_hw_pct`n'
 
-gen treated=0
-rename matched_unique_id unique_id
-rename matched_partner_id partner_id
-rename matched_rel_start rel_start_all
-rename matched_earn_pct female_earn_pct_t
-rename matched_hours_pct female_hours_pct_t
-rename matched_hw_pct wife_housework_pct_t
+	gen treated = 0
+	gen control_n = `n'
+	rename (unique_id partner_id) (treated_unique treated_partner)
+	rename (matched_unique_id`n' matched_partner_id`n' matched_rel_start`n' matched_earn_pct`n' matched_hours_pct`n' matched_hw_pct`n') ///
+	(unique_id partner_id rel_start_all female_earn_pct_t female_hours_pct_t wife_housework_pct_t)
 
-save "$temp/PSID_psm_control.dta", replace
+	save "$temp/PSID_psm_control_nn`n'.dta", replace
 
-restore
+	restore
+
+}
 
 // now append
 use "$temp/PSID_psm_base.dta", clear
-append using "$temp/PSID_psm_control.dta"
+forvalues n=1/5{
+	append using "$temp/PSID_psm_control_nn`n'.dta"
+}
+
+save "$created_data/PSID_psm_matched_long.dta", replace
+
+// 
 
 keep if duration_centered>=-5 & duration_centered <=5
 gen duration_pos = duration_centered + 6 // can't be negative
 
-// unadjusted
+// unadjusted regression
 regress female_earn_pct_t treated##i.duration_pos
 margins duration_pos#treated
 marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
@@ -588,7 +632,23 @@ regress wife_housework_pct_t treated##i.duration_pos
 margins duration_pos#treated
 marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
 
- 
+// is this the same or different as growth curve models? This is following Kapelle 2022. I think this is better. They are directionally similar; this better controls for time dependence within individuals.
+egen couple_id = group(unique_id partner_id)
+
+mixed female_earn_pct_t treated##i.duration_pos || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
+margins, at(duration_pos=(1(1)11) treated=(0 1)) // so is this how I graph the curve
+marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+mixed female_hours_pct_t treated##i.duration_pos || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
+margins, at(duration_pos=(1(1)11) treated=(0 1)) // so is this how I graph the curve
+marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+mixed wife_housework_pct_t treated##i.duration_pos || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
+margins, at(duration_pos=(1(1)11) treated=(0 1)) // so is this how I graph the curve
+marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+
+ /*
 ********************************************************************************
 **# Option 1b: keep groups of same length and recenter control, then weight?!
 * Using IPW based on PSM above?
@@ -686,4 +746,4 @@ restore
 **# Option 1c: Use PSM as time-varying covariate (see Kupzyk and Beal)
 * want to see how different this is from using PSM as a weight instead (as above)
 ********************************************************************************
-
+*/
