@@ -181,6 +181,14 @@ tab years_observed treated, m col
 unique unique_id if treated==0, by(years_observed) // like if I want to use 4 years even, there are only 186 control uniques...oh duh, kim, you sum all of them 4+ DUH because this is constant
 unique unique_id if treated==1, by(years_observed) // 190 treated at 4 years. so, is this actually even going to work on is this too small of a group
 
+// also add indicator of parenthood status to have / pull through in later steps (this created one and the children ones)
+browse unique_id partner_id survey_yr treated rel_start_all rel_end_all year_transitioned FIRST_BIRTH_YR had_birth had_first_birth had_first_birth_alt NUM_CHILDREN_ AGE_YOUNG_CHILD_ NUM_BIRTHS children children_ever
+
+gen birth_after_trans=0
+replace birth_after_trans = 1 if FIRST_BIRTH_YR >= year_transitioned & FIRST_BIRTH_YR!=9999 & NUM_BIRTHS!=0 & NUM_BIRTHS!=.
+
+browse unique_id partner_id survey_yr treated rel_start_all rel_end_all birth_after_trans year_transitioned FIRST_BIRTH_YR had_birth had_first_birth had_first_birth_alt NUM_CHILDREN_ AGE_YOUNG_CHILD_ NUM_BIRTHS children children_ever
+
 ********************************************************************************
 **# Some descriptive statistics
 * # have NOT really revisited this and need to automate:
@@ -575,7 +583,7 @@ browse unique_id partner_id survey_yr rel_start_all relationship_counter transit
 
 preserve
 
-keep unique_id partner_id survey_yr rel_start_all treated relationship_counter transition_counter duration_centered female_earn_pct_t female_hours_pct_t wife_housework_pct_t
+keep unique_id partner_id survey_yr rel_start_all treated relationship_counter transition_counter duration_centered female_earn_pct_t female_hours_pct_t wife_housework_pct_t birth_after_trans children children_ever
 
 // create variables that I'll add to the control ones
 gen control_n=.
@@ -592,7 +600,7 @@ forvalues n=1/5{
 	
 	preserve
 
-	keep unique_id partner_id matched_unique_id`n' matched_partner_id`n' survey_yr matched_rel_start`n' relationship_counter transition_counter duration_centered matched_earn_pct`n' matched_hours_pct`n' matched_hw_pct`n'
+	keep unique_id partner_id matched_unique_id`n' matched_partner_id`n' survey_yr matched_rel_start`n' relationship_counter transition_counter duration_centered matched_earn_pct`n' matched_hours_pct`n' matched_hw_pct`n' birth_after_trans children children_ever
 
 	gen treated = 0
 	gen control_n = `n'
@@ -615,40 +623,93 @@ forvalues n=1/5{
 save "$created_data/PSID_psm_matched_long.dta", replace
 
 // 
+**# START HERE FOR ANALYSIS
 
-keep if duration_centered>=-5 & duration_centered <=5
-gen duration_pos = duration_centered + 6 // can't be negative
+use "$created_data/PSID_psm_matched_long.dta", clear
+
+keep if duration_centered>=-3 & duration_centered <=5
+gen duration_pos = duration_centered + 4 // can't be negative
+
+******************************
+* OLS
+******************************
 
 // unadjusted regression
 regress female_earn_pct_t treated##i.duration_pos
 margins duration_pos#treated
-marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5")xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
 
 regress female_hours_pct_t treated##i.duration_pos
 margins duration_pos#treated
-marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Couple Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
 
 regress wife_housework_pct_t treated##i.duration_pos
 margins duration_pos#treated
-marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+
+******************************
+* Growth Curves
+******************************
 
 // is this the same or different as growth curve models? This is following Kapelle 2022. I think this is better. They are directionally similar; this better controls for time dependence within individuals.
 egen couple_id = group(unique_id partner_id)
 
 mixed female_earn_pct_t treated##i.duration_pos || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
-margins, at(duration_pos=(1(1)11) treated=(0 1)) // so is this how I graph the curve
-marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+margins, at(duration_pos=(1(1)9) treated=(0 1)) // so is this how I graph the curve
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
+
 
 mixed female_hours_pct_t treated##i.duration_pos || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
-margins, at(duration_pos=(1(1)11) treated=(0 1)) // so is this how I graph the curve
-marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+margins, at(duration_pos=(1(1)9) treated=(0 1)) // so is this how I graph the curve
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  
+
 
 mixed wife_housework_pct_t treated##i.duration_pos || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
-margins, at(duration_pos=(1(1)11) treated=(0 1)) // so is this how I graph the curve
-marginsplot, xlabel( 1 "-5" 2 "-4" 3 "-3" 4 "-2" 5 "-1" 6 "Transition" 7 "1" 8 "2" 9 "3" 10 "4" 11 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("")
+margins, at(duration_pos=(1(1)9) treated=(0 1)) // so is this how I graph the curve
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  
+
+// Attempting to add parenthood - gah I need to add this earlier...
+
+mixed female_earn_pct_t treated##i.duration_pos##i.birth_after_trans || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
+margins, at(duration_pos=(1(1)9) treated=(0 1) birth_after_trans=(0 1)) // so is this how I graph the curve
+marginsplot
+
+mixed female_earn_pct_t treated##i.duration_pos if birth_after_trans==0 || couple_id: duration_pos 
+margins, at(duration_pos=(1(1)9) treated=(0 1))
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
+
+mixed female_earn_pct_t treated##i.duration_pos if birth_after_trans==1 || couple_id: duration_pos 
+margins, at(duration_pos=(1(1)9) treated=(0 1))
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink))
+
+// do I actually want same treated group for all?
+
+gen birth_adj = birth_after_trans
+replace birth_adj = 0 if treated==0 
+
+mixed female_earn_pct_t treated##i.duration_pos##i.birth_adj || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
+margins, at(duration_pos=(1(1)9) treated=(0 1) birth_adj=(0 1))
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Earnings") legend(rows(1) position(bottom) order(1 "Cohab" 3 "CF Married" 4 "Child Married")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot3opts(lcolor(pink) mcolor(pink)) ci3opts(lcolor(pink)) plot4opts(lcolor(pink%30) mcolor(pink%30)) ci4opts(lcolor(pink%30))
+
+mixed female_hours_pct_t treated##i.duration_pos##i.birth_adj || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
+margins, at(duration_pos=(1(1)9) treated=(0 1) birth_adj=(0 1))
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Paid Work Hrs") legend(rows(1) position(bottom) order(1 "Cohab" 3 "CF Married" 4 "Child Married")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot3opts(lcolor(pink) mcolor(pink)) ci3opts(lcolor(pink)) plot4opts(lcolor(pink%30) mcolor(pink%30)) ci4opts(lcolor(pink%30)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  
+
+mixed wife_housework_pct_t treated##i.duration_pos##i.birth_adj || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
+margins, at(duration_pos=(1(1)9) treated=(0 1) birth_adj=(0 1))
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hrs") legend(rows(1) position(bottom) order(1 "Cohab" 3 "CF Married" 4 "Child Married")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot3opts(lcolor(pink) mcolor(pink)) ci3opts(lcolor(pink)) plot4opts(lcolor(pink%30) mcolor(pink%30)) ci4opts(lcolor(pink%30)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  
 
 
- /*
+
+/* Kapelle remarriage example
+mixed `var' 	c.divduration##i.treat##i.remar $control1 	|| id: divduration if psmatched2 ==1, variance mle cov(unstr)
+	mimrgns,  at(divduration=(0) treat ==(0 1) remar ==(0 1)) 
+mimrgns using remarwealth , esample(remarwealth) /// Wealth levels in year of divorce			
+			at(divduration=(0(1)30) treat ==(1) remar ==(0 1)) atmeans  
+*/
+
+
+/*
 ********************************************************************************
 **# Option 1b: keep groups of same length and recenter control, then weight?!
 * Using IPW based on PSM above?
