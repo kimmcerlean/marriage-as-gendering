@@ -256,8 +256,8 @@ egen ndistinct = total(tag), by(couple_id) // eventually drop those with less th
 xtset couple_id survey_yr
 
 // restrict to just treated? ugh, reading the Ludwig and Bruderl / Schechtl / Zhou and Khan, I am not sure.
-// keep if treated==1
-keep if duration_center >=-5 & duration_centered<=8
+// keep if treated==1 // think when I did this for Gender Workshop, I restricted to just treated...so, some of below needs that restriction to be comparable
+keep if duration_center >=-5 & duration_centered<=8 // I wonder if I update this to shorter time period? How much in the past do I want to compare?? I guess I can do this now and use filters later
 gen duration_pos = duration_center+6
 
 // quick data exploration
@@ -271,6 +271,22 @@ twoway (line female_earn_pct duration_centered if duration_centered>=-5 & durati
 (line female_hours_pct_t duration_centered if duration_centered>=-5 & duration_centered <=8) ///
 (line wife_housework_pct_t duration_centered if duration_centered>=-5 & duration_centered <=8), ///
 legend(order(1 "Earnings" 2 "Work Hours" 3 "Housework Hours") rows(1) position(6)) xscale(range(-5 8)) xlabel(-5(1)8)  xline(0)
+
+restore
+
+ 
+preserve
+
+collapse (median) female_earn_pct_t female_hours_pct_t wife_housework_pct_t, by(duration_centered treated)
+
+twoway (line female_earn_pct duration_centered if duration_centered>=-5 & duration_centered <=8 & treated==0, lcolor(green) lpattern(dash)) ///
+(line female_earn_pct duration_centered if duration_centered>=-5 & duration_centered <=8 & treated==1, lcolor(green) lpattern(solid)) 		///
+(line female_hours_pct_t duration_centered if duration_centered>=-5 & duration_centered <=8 & treated==0, lcolor(blue) lpattern(dash)) 		///
+(line female_hours_pct_t duration_centered if duration_centered>=-5 & duration_centered <=8 & treated==1, lcolor(blue) lpattern(solid)) 	///
+(line wife_housework_pct_t duration_centered if duration_centered>=-5 & duration_centered <=8 & treated==0, lcolor(pink) lpattern(dash)) 	///
+(line wife_housework_pct_t duration_centered if duration_centered>=-5 & duration_centered <=8 & treated==1, lcolor(pink) lpattern(solid)), 	///
+legend(order(1 "Earnings: Control" 2 "Earnings: Treated" 3 "Work Hours: Control" 4 "Work Hours: Treated" 5 "HW Hours: Control" 6 "HW Hours: Treated") ///
+rows(2) position(6)) xscale(range(-5 8)) xlabel(-5(1)8)  xline(0)
 
 restore
 
@@ -288,24 +304,35 @@ replace married = 1 if marital_status_updated==1
 
 tabstat female_earn_pct_t female_hours_pct_t wife_housework_pct_t, by(married) // without controls, this is what I'd be estimating? yes
 regress female_earn_pct_t i.married
+regress female_earn_pct_t i.married if treated==1
+margins married
+regress female_earn_pct_t i.married if duration_centered >=-2 & duration_centered <=5 & treated==1 
+
 regress female_hours_pct_t i.married
+regress female_hours_pct_t i.married if treated==1
+margins married
+regress female_hours_pct_t i.married  if duration_centered >=-2 & duration_centered <=5  & treated==1
+
 regress wife_housework_pct_t i.married
+regress wife_housework_pct_t i.married if treated==1
+margins married
+regress wife_housework_pct_t i.married  if duration_centered >=-2 & duration_centered <=5 & treated==1
 
 ttest female_earn_pct_t, by(married) // also same as regression
 ttest female_hours_pct_t, by(married) // also same as regression
 ttest wife_housework_pct_t, by(married) // also same as regression
 
 // does this match the descriptive over time?
-regress female_earn_pct_t i.duration_pos
-margins duration_pos
+regress female_earn_pct_t i.duration_pos##i.treated
+margins duration_pos#treated
 marginsplot
 
-regress female_hours_pct_t i.duration_pos
-margins duration_pos
+regress female_hours_pct_t i.duration_pos##i.treated
+margins duration_pos#treated
 marginsplot
 
-regress wife_housework_pct_t i.duration_pos
-margins duration_pos
+regress wife_housework_pct_t i.duration_pos##i.treated
+margins duration_pos#treated
 marginsplot
 
 // now, start to add fixed effects
@@ -316,6 +343,9 @@ regress female_earn_pct_t i.married i.couple_id // -.0054635
 margins married
 
 xtreg female_earn_pct_t i.married, fe // this exactly matches above: -.0054635 (without survey yr); -.0054635 (with survey yr - okay so is same
+margins married
+
+xtreg female_earn_pct_t i.married if treated==1, fe // this doesn't change much except standard error because no within couple change for the treated
 margins married
 
 xtreg female_hours_pct_t i.married, fe
@@ -399,184 +429,141 @@ xtreg wife_housework_pct_t i.married `controls' i.relationship_duration, fe
 margins married
 
 ************************************
-* What happens when I try xtfeis
+**# Think *this* (top one) is the compare / constrast I want?
 ************************************
-// see also Happiness5 files from Bruderl / Ludwig lecture for more info here
+// with both controls AND control group
+local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
 
-tab duration_pos,gen(dur)
-xtfeis female_earn_pct_t married ib6.duration_pos, slope(AGE_WIFE_) cluster(couple_id)
-est store feis1
+regress female_earn_pct_t i.married `controls'
+margins married
+xtreg female_earn_pct_t i.married `controls', fe
+margins married
 
-xtfeis female_earn_pct_t married dur1 dur2 dur3 dur4 dur5 dur7 dur8 dur9 dur10 dur11 dur12 dur13 dur14, slope(AGE_WIFE_) cluster(couple_id)
-est store feis2
+regress female_hours_pct_t i.married `controls'
+margins married
+xtreg female_hours_pct_t i.married `controls', fe
+margins married
 
-coefplot feis2, keep(married dur*)
+regress wife_housework_pct_t i.married `controls'
+margins married
+xtreg wife_housework_pct_t i.married `controls', fe
+margins married
 
-xtfeis female_earn_pct_t married dur1 dur2 dur3 dur4 dur5 dur7 dur8 dur9 dur10 dur11 dur12 dur13 dur14 if treated==1, slope(AGE_WIFE_) cluster(couple_id)
-est store feis3
+// with controls, but NO control group
+local controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
 
-coefplot feis3, keep(married dur*)
+regress female_earn_pct_t i.married `controls' if treated==1
+margins married
+xtreg female_earn_pct_t i.married `controls' if treated==1, fe
+margins married
 
-* Confused because it seems like Ludwig puts all of the control at 0
-gen dur_alt = duration_pos
-replace dur_alt = 6 if treated==0 // should it be 6 actually, because that is real 0?
-tab dur_alt, gen(dur_alt)
+regress female_hours_pct_t i.married `controls' if treated==1
+margins married
+xtreg female_hours_pct_t i.married `controls' if treated==1, fe
+margins married
 
-xtfeis female_earn_pct_t married dur_alt1 dur_alt2 dur_alt3 dur_alt4 dur_alt5 dur_alt7 dur_alt8 dur_alt9 dur_alt10 dur_alt11 dur_alt12 dur_alt13 dur_alt14, slope(AGE_WIFE_) cluster(couple_id) // this appears to match the above where I restricted just to treated...
-est store feis4
+regress wife_housework_pct_t i.married `controls' if treated==1
+margins married
+xtreg wife_housework_pct_t i.married `controls'  if treated==1, fe
+margins married
 
-coefplot feis4, keep(married dur_alt*)
+// no controls but with control group
+regress female_earn_pct_t i.married
+margins married
+xtreg female_earn_pct_t i.married, fe
+margins married
 
-* but then they don't have the treatment variable in model?
+regress female_hours_pct_t i.married
+margins married
+xtreg female_hours_pct_t i.married, fe
+margins married
 
-xtfeis female_earn_pct_t dur_alt1 dur_alt2 dur_alt3 dur_alt4 dur_alt6 dur_alt7 dur_alt8 dur_alt9 dur_alt10 dur_alt11 dur_alt12 dur_alt13 dur_alt14, slope(AGE_WIFE_) cluster(couple_id) // this appears to match the above where I restricted just to treated...
-est store feis5
-coefplot feis5, keep(dur_alt*)
+regress wife_housework_pct_t i.married
+margins married
+xtreg wife_housework_pct_t i.married, fe
+margins married
 
-// I am so confused
-xtreg female_earn_pct_t ib5.dur_alt  if treated==1,  fe
-margins dur_alt
-marginsplot
+// no controls OR control group
+regress female_earn_pct_t i.married if treated==1
+margins married
+xtreg female_earn_pct_t i.married if treated==1, fe
+margins married
 
-xtreg female_earn_pct_t  dur_alt1 dur_alt2 dur_alt3 dur_alt4 dur_alt6 dur_alt7 dur_alt8 dur_alt9 dur_alt10 dur_alt11 dur_alt12 dur_alt13 dur_alt14 $controls, fe
-est store fe5
-margins dur_alt
-marginsplot
+regress female_hours_pct_t i.married if treated==1
+margins married
+xtreg female_hours_pct_t i.married if treated==1, fe
+margins married
 
-coefplot feis5 fe5, keep(dur_alt*)
+regress wife_housework_pct_t i.married if treated==1
+margins married
+xtreg wife_housework_pct_t i.married if treated==1, fe
+margins married
 
 ************************************
-* Working through impact functions
-************************************
-// okay, looking at the Happiness 3 replicate code, I see now. Duration only starts ONCE married
-gen duration_married = 0
-replace duration_married = duration_centered + 1 if married==1
-
-tab duration_married married
-tab duration_married treated
-
-xtreg female_earn_pct_t i.married c.duration_married##c.duration_married $controls, fe
-
-* Plotting the marginal marriage effects (Conditional Effect Plot)
-* See slides pdf 96: "reference point is average of all PYs prior to marriage" - only within treated
-margins, at(married=(0 1) duration_married=(0(1)8)) contrast(atcontrast(r._at) lincom) noatlegend
-marginsplot, recast(line) recastci(rline) yline(0, lcolor(black) lpatter(solid)) ///
-   x(duration_married)                                                  /// yrsmarried is on the X-axis
-   plot1opts(lstyle(none)) ci1opts(lstyle(none))                  /// omit graph for never-married
-   plot2opts(lpattern(solid) lwidth(thick) lcolor(blue))     	  /// estimate for married
-   ci2opts(lpattern(dash) lwidth(medthick) lcolor(green))         /// CI for estimate married
-   ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f)) /// 
-   xlabel(0(1)8, labsize(medium))                                ///
-   xtitle("Years since marriage", size(large) margin(0 0 0 2))    ///
-   ytitle("Change in Female Earnings Percent", size(large))   title(" ")        ///
-   legend(pos(7) ring(0) row(1) order(2 "95%-CI") size(medlarge))     
-   
-  
-// for dummy impact, though, they take essentially my duration centered, then lump ALL prior to -1 into -1
-// then add 1 so -1 becomes 0 aka not yet married
-// then assign control to 0 so it becomes "not yet married" AND "never married" - so this is the comparison - ALL YEARS NEVER MARRIED
-tab duration_centered treated
-tab duration_centered married
-
-gen dummy_duration = .
-replace dummy_duration = duration_centered if treated==1
-recode dummy_duration (min/-1=-1)
-replace dummy_duration = dummy_duration+1
-replace dummy_duration = 0 if treated==0
-
-tab dummy_duration treated
-tab dummy_duration married
-
-xtreg female_earn_pct_t i.dummy_duration $controls, fe 
-estimates store d1
-
-xtfeis female_earn_pct_t i.dummy_duration $controls, slope(relationship_duration) cluster(couple_id)
-est store d2
-
-coefplot 	(d1, lcolor("red*1.2") mcolor("red*1.2") ciopts(color("red*1.2"))) 				///
-			(d2, lcolor("eltblue") mcolor("eltblue") ciopts(color("eltblue"))),				///
-			keep(*.dummy_duration) vertical yline(0, lpattern(solid)) recast(line) 			///
-			coeflabels(1.dummy_duration="0" 2.dummy_duration="1" 3.dummy_duration="2" 		///
-			4.dummy_duration="3" 5.dummy_duration="4" 6.dummy_duration="5"      			///
-		    7.dummy_duration="6" 8.dummy_duration="7" 9.dummy_duration="8")        			///         
-			ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        			///
-			xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        			///
-			ytitle("Change in Female Earnings %", size(medlarge)) 		  
-		  
-coefplot 	(d1, lcolor("red*1.2") mcolor("red*1.2") ciopts(recast(rline) lpattern(dash) lcolor("red*1.2"))) 				///
-			(d2, lcolor("eltblue") mcolor("eltblue") ciopts(recast(rline) lpattern(dash) lcolor("eltblue"))),				///
-			keep(*.dummy_duration) vertical yline(0, lpattern(solid)) recast(line) 			///
-			coeflabels(1.dummy_duration="0" 2.dummy_duration="1" 3.dummy_duration="2" 		///
-			4.dummy_duration="3" 5.dummy_duration="4" 6.dummy_duration="5"      			///
-		    7.dummy_duration="6" 8.dummy_duration="7" 9.dummy_duration="8")        			///         
-			ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        			///
-			xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        			///
-			ytitle("Change in Female Earnings %", size(medlarge)) 		  
-		  
-		  
-xtreg female_hours_pct_t i.dummy_duration $controls, fe 
-est store d3
-xtfeis female_hours_pct_t i.dummy_duration $controls, slope(relationship_duration) cluster(couple_id)
-est store d4
-
-coefplot 	(d3, lcolor("red*1.2") mcolor("red*1.2") ciopts(color("red*1.2"))) 				///
-			(d4, lcolor("eltblue") mcolor("eltblue") ciopts(color("eltblue"))),				///
-			keep(*.dummy_duration) vertical yline(0, lpattern(solid)) recast(line) 			///
-			coeflabels(1.dummy_duration="0" 2.dummy_duration="1" 3.dummy_duration="2" 		///
-			4.dummy_duration="3" 5.dummy_duration="4" 6.dummy_duration="5"      			///
-		    7.dummy_duration="6" 8.dummy_duration="7" 9.dummy_duration="8")        			///         
-			ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        			///
-			xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        			///
-			ytitle("Change in Female Hours %", size(medlarge)) 		  
-		  
-
-		  
-xtreg wife_housework_pct_t i.dummy_duration $controls, fe 
-est store d5
-xtfeis wife_housework_pct_t i.dummy_duration $controls, slope(relationship_duration) cluster(couple_id)
-est store d6
-
-coefplot 	(d5, lcolor("red*1.2") mcolor("red*1.2") ciopts(color("red*1.2"))) 				///
-			(d6, lcolor("eltblue") mcolor("eltblue") ciopts(color("eltblue"))),				///
-			keep(*.dummy_duration) vertical yline(0, lpattern(solid)) recast(line) 			///
-			coeflabels(1.dummy_duration="0" 2.dummy_duration="1" 3.dummy_duration="2" 		///
-			4.dummy_duration="3" 5.dummy_duration="4" 6.dummy_duration="5"      			///
-		    7.dummy_duration="6" 8.dummy_duration="7" 9.dummy_duration="8")        			///         
-			ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        			///
-			xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        			///
-			ytitle("Change in Female HW %", size(medlarge)) 		  
-		  
-// okay but then they go into other anticipation effects up to year -6, so this is where I could just use my duration positive?
-// I just need to figure out where to put control - at time -5 or time 0 (they should be in reference category they say)
-tab duration_pos treated
-gen duration_pos2 = duration_pos
-replace duration_pos2 = 1 if treated==0
-tab duration_pos2 treated
-
-xtreg female_earn_pct_t i.duration_pos2 $controls, fe 
-
-coefplot, keep(*.duration_pos2) vertical yline(0, lpattern(solid)) recast(line) lwidth(thick) lcolor(blue)  ///
-          xline(6, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(medthick) lcolor(green))   	/// 
-		  ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        					///
-		  coeflabels(1.duration_pos2="-5" 2.duration_pos2="-4" 3.duration_pos2="-3" 				///
-		  4.duration_pos2="-2" 5.duration_pos2="-1" 6.duration_pos2="0" 7.duration_pos2="1" 		///
-		  8.duration_pos2="2" 9.duration_pos2="3" 10.duration_pos2="4" 11.duration_pos2="5"			///
-		  12.duration_pos2="6" 13.duration_pos2="7" 14.duration_pos2="8") 	  						///  
-          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
-          ytitle("Change in Female Earnings %", size(medlarge)) 
-		  
-
-xtreg female_earn_pct_t ib5.duration_pos2 $controls, fe 
-		  
-************************************
-* Comparisons
+**# FEIS v. FE
 ************************************
 // so I feel like this is what matches Zhou and Kan. How do I add the TIME element though??
 // and decide if I keep never treated or not (Bruderl / Schechtl def do; I feel like Z&K do as well?)
+global controls "i.educ_head_est i.educ_wife_est AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr" // i.raceth_head_fixed i.raceth_wife_fixed  - not time varying
 
+// controls  AND control group
+xtreg female_earn_pct_t i.married $controls, fe
+xtfeis female_earn_pct_t married $controls, slope(relationship_duration) cluster(couple_id) 
+margins, at(married=(0 1)) // confused because only getting effect, NOT raw percentages
+
+xtreg female_hours_pct_t i.married $controls, fe
+xtfeis female_hours_pct_t married $controls, slope(relationship_duration) cluster(couple_id) 
+
+xtreg wife_housework_pct_t i.married $controls, fe
+xtfeis wife_housework_pct_t married $controls, slope(relationship_duration) cluster(couple_id) 
+
+// with controls, but NO control group
+xtreg female_earn_pct_t i.married $controls if treated==1, fe
+xtfeis female_earn_pct_t married $controls if treated==1, slope(relationship_duration) cluster(couple_id) 
+
+xtreg female_hours_pct_t i.married $controls if treated==1, fe
+xtfeis female_hours_pct_t married $controls if treated==1, slope(relationship_duration) cluster(couple_id) 
+
+xtreg wife_housework_pct_t i.married $controls if treated==1, fe
+xtfeis wife_housework_pct_t married $controls if treated==1, slope(relationship_duration) cluster(couple_id) 
+
+// no controls but with control group
+xtreg female_earn_pct_t i.married, fe
+xtfeis female_earn_pct_t married, slope(relationship_duration) cluster(couple_id) 
+
+xtreg female_hours_pct_t i.married, fe
+xtfeis female_hours_pct_t married, slope(relationship_duration) cluster(couple_id) 
+
+xtreg wife_housework_pct_t i.married, fe
+xtfeis wife_housework_pct_t married, slope(relationship_duration) cluster(couple_id) 
+
+// no controls OR control group
+xtreg female_earn_pct_t i.married if treated==1, fe
+xtfeis female_earn_pct_t married if treated==1, slope(relationship_duration) cluster(couple_id) 
+
+xtreg female_hours_pct_t i.married if treated==1, fe
+xtfeis female_hours_pct_t married if treated==1, slope(relationship_duration) cluster(couple_id) 
+
+xtreg wife_housework_pct_t i.married if treated==1, fe
+xtfeis wife_housework_pct_t married if treated==1, slope(relationship_duration) cluster(couple_id) 
+
+// Hausman test for whether or not you need FEIS v. FE
+tab educ_head_est, gen(educ_h)
+tab educ_wife_est, gen(educ_w)
+
+local controls  "educ_h2 educ_h3 educ_h4 educ_w2 educ_w3 educ_w4 AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr"  // educ_h1 educ_w1
+
+xtfeis female_earn_pct_t married `controls', slope(relationship_duration) cluster(couple_id) 
+xtart, keep(married) 
+
+xtfeis female_hours_pct_t married `controls', slope(relationship_duration) cluster(couple_id) 
+xtart, keep(married) 
+
+xtfeis wife_housework_pct_t married `controls', slope(relationship_duration) cluster(couple_id) 
+xtart, keep(married) 
+
+** Initial exploration
 // Earnings
-global controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
-
 regress female_earn_pct_t married $controls if treated==1
 est store e0
 
@@ -644,7 +631,11 @@ est store hw3
 
 coefplot (hw0, label("Base")) (hw1,label("FE")) (hw2,label("FEIS")) (hw3,label("FEIS, dur")), keep(married)
 
+/*
 // Hausman test for whether or not you need FEIS v. FE
+
+// this isn't working because of the factor variables in controls; fixed above
+
 global controls "i.educ_head_est i.educ_wife_est i.raceth_head_fixed i.raceth_wife_fixed AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 i.home_owner NUM_CHILDREN_ rel_start_yr"
 xtfeis female_earn_pct_t married $controls if treated==1, slope(AGE_WIFE_) cluster(couple_id)
 // xtart // this is giving errors
@@ -665,7 +656,433 @@ xtart, keep(married)
 
 xtfeis wife_housework_pct_t married $controls, slope(relationship_duration) cluster(couple_id)
 xtart, keep(married) // so this one is significant
+*/
 
+************************************
+**# COEFPLOT FOR FLOPS (May 2025)
+************************************
+// with both controls AND control group
+global controls "i.educ_head_est i.educ_wife_est AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr" // i.raceth_head_fixed i.raceth_wife_fixed  - not time varying
+
+** Earnings
+regress female_earn_pct_t married $controls
+est store e_b
+xtreg female_earn_pct_t married $controls, fe
+est store e_fe
+xtfeis female_earn_pct_t married $controls, slope(relationship_duration) cluster(couple_id) 
+est store e_feis
+
+** Paid Work Hours
+regress female_hours_pct_t married $controls
+est store h_b
+xtreg female_hours_pct_t married $controls, fe
+est store h_fe
+xtfeis female_hours_pct_t married $controls, slope(relationship_duration) cluster(couple_id) 
+est store h_feis
+
+** Housework
+regress wife_housework_pct_t married $controls
+est store hw_b
+xtreg wife_housework_pct_t married $controls, fe
+est store hw_fe
+xtfeis wife_housework_pct_t married $controls, slope(relationship_duration) cluster(couple_id) 
+est store hw_feis
+
+coefplot 	(h_b, label("OLS") lcolor("gs8") mcolor("gs8") ciopts(color("gs8"))) ///
+			(h_fe,label("FE") lcolor("pink") mcolor("pink") ciopts(color("pink"))) ///
+			(h_feis,label("FEIS") lcolor("pink%30") mcolor("pink%30") ciopts(color("pink%30"))), bylabel("Paid Work Hours") || ///
+			(e_b, label("OLS")) (e_fe,label("FE")) (e_feis,label("FEIS")), bylabel("Earnings") || ///
+			(hw_b, label("OLS")) (hw_fe,label("FE")) (hw_feis,label("FEIS")), bylabel("Housework") || ///
+			, keep(married)  byopts(rows(1)) xsize(8) ysize(3) xline(0, lcolor(black) lstyle(solid)) levels(90) ///
+			base coeflabels(married = "") xtitle(Change in Women's Share, size(small)) legend(rows(1)) ylabel(none)
+
+coefplot 	(h_b, label("OLS") lcolor("gs8") mcolor("gs8") ciopts(color("gs8"))) ///
+			(h_fe,label("FE") lcolor("pink") mcolor("pink") ciopts(color("pink"))) ///
+			(h_feis,label("FEIS") lcolor("pink%30") mcolor("pink%30") ciopts(color("pink%30"))), bylabel("Paid Work Hours") || ///
+			(hw_b, label("OLS")) (hw_fe,label("FE")) (hw_feis,label("FEIS")), bylabel("Housework") || ///
+			, keep(married)  byopts(rows(1)) xsize(7) ysize(3) xline(0, lcolor(black) lstyle(solid)) levels(90) ///
+			base coeflabels(married = "") xtitle(Change in Women's Share, size(small)) legend(rows(1)) ylabel(none)
+
+			
+
+************************************
+* What happens when I try xtfeis
+************************************
+/*
+// see also Happiness5 files from Bruderl / Ludwig lecture for more info here
+
+tab duration_pos,gen(dur)
+xtfeis female_earn_pct_t married ib6.duration_pos, slope(AGE_WIFE_) cluster(couple_id)
+est store feis1
+
+xtfeis female_earn_pct_t married dur1 dur2 dur3 dur4 dur5 dur7 dur8 dur9 dur10 dur11 dur12 dur13 dur14, slope(AGE_WIFE_) cluster(couple_id)
+est store feis2
+
+coefplot feis2, keep(married dur*)
+
+xtfeis female_earn_pct_t married dur1 dur2 dur3 dur4 dur5 dur7 dur8 dur9 dur10 dur11 dur12 dur13 dur14 if treated==1, slope(AGE_WIFE_) cluster(couple_id)
+est store feis3
+
+coefplot feis3, keep(married dur*)
+
+* Confused because it seems like Ludwig puts all of the control at 0
+gen dur_alt = duration_pos
+replace dur_alt = 6 if treated==0 // should it be 6 actually, because that is real 0?
+tab dur_alt, gen(dur_alt)
+
+xtfeis female_earn_pct_t married dur_alt1 dur_alt2 dur_alt3 dur_alt4 dur_alt5 dur_alt7 dur_alt8 dur_alt9 dur_alt10 dur_alt11 dur_alt12 dur_alt13 dur_alt14, slope(AGE_WIFE_) cluster(couple_id) // this appears to match the above where I restricted just to treated...
+est store feis4
+
+coefplot feis4, keep(married dur_alt*)
+
+* but then they don't have the treatment variable in model?
+
+xtfeis female_earn_pct_t dur_alt1 dur_alt2 dur_alt3 dur_alt4 dur_alt6 dur_alt7 dur_alt8 dur_alt9 dur_alt10 dur_alt11 dur_alt12 dur_alt13 dur_alt14, slope(AGE_WIFE_) cluster(couple_id) // this appears to match the above where I restricted just to treated...
+est store feis5
+coefplot feis5, keep(dur_alt*)
+
+// I am so confused
+xtreg female_earn_pct_t ib5.dur_alt  if treated==1,  fe
+margins dur_alt
+marginsplot
+
+xtreg female_earn_pct_t  dur_alt1 dur_alt2 dur_alt3 dur_alt4 dur_alt6 dur_alt7 dur_alt8 dur_alt9 dur_alt10 dur_alt11 dur_alt12 dur_alt13 dur_alt14 $controls, fe
+est store fe5
+margins dur_alt
+marginsplot
+
+coefplot feis5 fe5, keep(dur_alt*)
+*/
+
+
+************************************
+* Working through impact functions
+************************************
+// okay, looking at the Happiness 3 replicate code, I see now. Duration only starts ONCE married
+gen duration_married = 0
+replace duration_married = duration_centered + 1 if married==1
+
+tab duration_married married
+tab duration_married treated
+
+xtreg female_earn_pct_t i.married c.duration_married##c.duration_married $controls, fe
+
+* Plotting the marginal marriage effects (Conditional Effect Plot)
+* See slides pdf 96: "reference point is average of all PYs prior to marriage" - only within treated
+margins, at(married=(0 1) duration_married=(0(1)8)) contrast(atcontrast(r._at) lincom) noatlegend
+marginsplot, recast(line) recastci(rline) yline(0, lcolor(black) lpatter(solid)) ///
+   x(duration_married)                                                  /// yrsmarried is on the X-axis
+   plot1opts(lstyle(none)) ci1opts(lstyle(none))                  /// omit graph for never-married
+   plot2opts(lpattern(solid) lwidth(thick) lcolor(blue))     	  /// estimate for married
+   ci2opts(lpattern(dash) lwidth(medthick) lcolor(green))         /// CI for estimate married
+   ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f)) /// 
+   xlabel(0(1)8, labsize(medium))                                ///
+   xtitle("Years since marriage", size(large) margin(0 0 0 2))    ///
+   ytitle("Change in Female Earnings Percent", size(large))   title(" ")        ///
+   legend(pos(7) ring(0) row(1) order(2 "95%-CI") size(medlarge))     
+   
+  
+// for dummy impact, though, they take essentially my duration centered, then lump ALL prior to -1 into -1
+// then add 1 so -1 becomes 0 aka not yet married
+// then assign control to 0 so it becomes "not yet married" AND "never married" - so this is the comparison - ALL YEARS NEVER MARRIED
+tab duration_centered treated
+tab duration_centered married
+
+gen dummy_duration = .
+replace dummy_duration = duration_centered if treated==1
+recode dummy_duration (min/-1=-1)
+replace dummy_duration = dummy_duration+1
+replace dummy_duration = 0 if treated==0
+
+tab dummy_duration treated
+tab dummy_duration married
+
+xtreg female_earn_pct_t i.dummy_duration $controls, fe 
+estimates store d1
+
+xtfeis female_earn_pct_t i.dummy_duration $controls, slope(relationship_duration) cluster(couple_id)
+est store d2
+
+coefplot 	(d1, lcolor("red*1.2") mcolor("red*1.2") ciopts(color("red*1.2")) label("FE")) 		///
+			(d2, lcolor("eltblue") mcolor("eltblue") ciopts(color("eltblue")) label("FEIS")), 	///
+			keep(*.dummy_duration) vertical yline(0, lpattern(solid)) recast(line) 			///
+			coeflabels(1.dummy_duration="0" 2.dummy_duration="1" 3.dummy_duration="2" 		///
+			4.dummy_duration="3" 5.dummy_duration="4" 6.dummy_duration="5"      			///
+		    7.dummy_duration="6" 8.dummy_duration="7" 9.dummy_duration="8")        			///         
+			ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        			///
+			xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        			///
+			ytitle("Change in Female Earnings %", size(medlarge)) 		  
+		  
+coefplot 	(d1, lcolor("red*1.2") mcolor("red*1.2") ciopts(recast(rline) lpattern(dash) lcolor("red*1.2")) label("FE")) 				///
+			(d2, lcolor("eltblue") mcolor("eltblue") ciopts(recast(rline) lpattern(dash) lcolor("eltblue")) label("FEIS")),				///
+			keep(*.dummy_duration) vertical yline(0, lpattern(solid)) recast(line) 			///
+			coeflabels(1.dummy_duration="0" 2.dummy_duration="1" 3.dummy_duration="2" 		///
+			4.dummy_duration="3" 5.dummy_duration="4" 6.dummy_duration="5"      			///
+		    7.dummy_duration="6" 8.dummy_duration="7" 9.dummy_duration="8")        			///         
+			ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        			///
+			xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        			///
+			ytitle("Change in Female Earnings %", size(medlarge)) 		  
+		  
+		  
+xtreg female_hours_pct_t i.dummy_duration $controls, fe 
+est store d3
+xtfeis female_hours_pct_t i.dummy_duration $controls, slope(relationship_duration) cluster(couple_id)
+est store d4
+
+coefplot 	(d3, lcolor("red*1.2") mcolor("red*1.2") ciopts(color("red*1.2"))) 				///
+			(d4, lcolor("eltblue") mcolor("eltblue") ciopts(color("eltblue"))),				///
+			keep(*.dummy_duration) vertical yline(0, lpattern(solid)) recast(line) 			///
+			coeflabels(1.dummy_duration="0" 2.dummy_duration="1" 3.dummy_duration="2" 		///
+			4.dummy_duration="3" 5.dummy_duration="4" 6.dummy_duration="5"      			///
+		    7.dummy_duration="6" 8.dummy_duration="7" 9.dummy_duration="8")        			///         
+			ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        			///
+			xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        			///
+			ytitle("Change in Female Hours %", size(medlarge)) 		  
+		  
+
+		  
+xtreg wife_housework_pct_t i.dummy_duration $controls, fe 
+est store d5
+xtfeis wife_housework_pct_t i.dummy_duration $controls, slope(relationship_duration) cluster(couple_id)
+est store d6
+
+coefplot 	(d5, lcolor("red*1.2") mcolor("red*1.2") ciopts(color("red*1.2"))) 				///
+			(d6, lcolor("eltblue") mcolor("eltblue") ciopts(color("eltblue"))),				///
+			keep(*.dummy_duration) vertical yline(0, lpattern(solid)) recast(line) 			///
+			coeflabels(1.dummy_duration="0" 2.dummy_duration="1" 3.dummy_duration="2" 		///
+			4.dummy_duration="3" 5.dummy_duration="4" 6.dummy_duration="5"      			///
+		    7.dummy_duration="6" 8.dummy_duration="7" 9.dummy_duration="8")        			///         
+			ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        			///
+			xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        			///
+			ytitle("Change in Female HW %", size(medlarge)) 		  
+		  
+// okay but then they go into other anticipation effects up to year -6, so this is where I could just use my duration positive?
+// I just need to figure out where to put control - at time -5 or time 0 (they should be in reference category they say)
+// this is with controls at time -5
+tab duration_pos treated
+gen duration_pos2 = duration_pos
+replace duration_pos2 = 1 if treated==0
+tab duration_pos2 treated
+
+xtreg female_earn_pct_t i.duration_pos2 $controls, fe // ref group is time -5. Okay, I like the reference group at time -1. this is more real
+
+coefplot, keep(*.duration_pos2) vertical yline(0, lpattern(solid)) recast(line) lwidth(thick) lcolor(blue)  ///
+          xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(medthick) lcolor(green))   	/// 
+		  ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  coeflabels(1.duration_pos2="-5" 2.duration_pos2="-4" 3.duration_pos2="-3" 				///
+		  4.duration_pos2="-2" 5.duration_pos2="-1" 6.duration_pos2="0" 7.duration_pos2="1" 		///
+		  8.duration_pos2="2" 9.duration_pos2="3" 10.duration_pos2="4" 11.duration_pos2="5"			///
+		  12.duration_pos2="6" 13.duration_pos2="7" 14.duration_pos2="8") 	  						///  
+          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+          ytitle("Change in Female Earnings %", size(medlarge)) 
+		  
+
+xtreg female_earn_pct_t ib5.duration_pos2 $controls, fe // ref group is time 0\
+
+coefplot, keep(*.duration_pos2) vertical yline(0, lpattern(solid)) recast(line) lwidth(thick) lcolor(blue)  ///
+          xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(medthick) lcolor(green))   	/// 
+		  ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  coeflabels(1.duration_pos2="-5" 2.duration_pos2="-4" 3.duration_pos2="-3" 				///
+		  4.duration_pos2="-2" 5.duration_pos2="-1" 6.duration_pos2="0" 7.duration_pos2="1" 		///
+		  8.duration_pos2="2" 9.duration_pos2="3" 10.duration_pos2="4" 11.duration_pos2="5"			///
+		  12.duration_pos2="6" 13.duration_pos2="7" 14.duration_pos2="8") 	  						///  
+          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+          ytitle("Change in Female Earnings %", size(medlarge)) 
+		  
+
+// this is with controls at time 0. okay this literally doesn't matter
+tab duration_pos treated
+gen duration_pos3 = duration_pos
+replace duration_pos3 = 6 if treated==0
+tab duration_pos3 treated
+
+xtreg female_earn_pct_t i.duration_pos3 $controls, fe // ref group is time -5
+
+coefplot, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) recast(line) lwidth(thick) lcolor(blue)  ///
+          xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(medthick) lcolor(green))   	/// 
+		  ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		  4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		  8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"			///
+		  12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  						///  
+          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+          ytitle("Change in Female Earnings %", size(medlarge)) 
+		  
+
+xtreg female_earn_pct_t ib5.duration_pos3 $controls, fe // ref group is time 0
+
+coefplot, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) recast(line) lwidth(thick) lcolor(blue)  ///
+          xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(medthick) lcolor(green))   	/// 
+		  ylabel(-.3(.1).5, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		  4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		  8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"			///
+		  12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  						///  
+          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+          ytitle("Change in Female Earnings %", size(medlarge)) 
+		  	  
+************************************
+**# IMPACT PLOTS FOR FLOPS (May 2025)
+************************************
+** Earnings
+xtreg female_earn_pct_t ib5.duration_pos3 $controls, fe // ref group is time 0
+
+coefplot, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) recast(line) lwidth(medthick) lcolor(pink)  ///
+          xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30))   	/// 
+		  ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		  4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		  8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"			///
+		  12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  						///  
+          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+          ytitle("Change in Women's Earnings %", size(medlarge)) 
+		  	  
+** Paid Work Hours
+xtreg female_hours_pct_t ib5.duration_pos3 $controls, fe // ref group is time 0
+
+coefplot, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) recast(line) lwidth(medthick) lcolor(pink) ///
+          xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30))   	/// 
+		  ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		  4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		  8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"			///
+		  12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  						///  
+          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+          ytitle("Change in Women's Paid Work Hrs %", size(medlarge)) 
+		  	  
+** Housework
+xtreg wife_housework_pct_t ib5.duration_pos3 $controls, fe // ref group is time 0
+
+coefplot, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) recast(line) lwidth(medthick) lcolor(pink)  ///
+          xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30))   	/// 
+		  ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		  4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		  8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"			///
+		  12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  						///  
+          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+          ytitle("Change in Women's Housework Hrs %", size(medlarge)) 
+		  
+// Can I interact with having a birth? (AFTER marriage)
+// try a. interact with birth after marriage and b. interact with children ever in HH
+gen birth_after_trans=0
+replace birth_after_trans = 1 if FIRST_BIRTH_YR >= year_transitioned & FIRST_BIRTH_YR!=9999 & NUM_BIRTHS!=0 & NUM_BIRTHS!=.
+
+gen birth_interact = birth_after_trans
+replace birth_interact = 0 if birth_after_trans==1 & inrange(duration_pos3,1,4)
+
+browse unique_id partner_id survey_yr rel_start_all rel_end_all birth_after_trans birth_interact duration_pos3 year_transitioned FIRST_BIRTH_YR had_birth had_first_birth had_first_birth_alt NUM_CHILDREN_ AGE_YOUNG_CHILD_ NUM_BIRTHS children children_ever
+
+** Earnings
+xtreg female_earn_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins duration_pos3#birth_interact
+marginsplot
+
+xtreg female_earn_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins, dydx(duration_pos3) at(birth_interact==0) post
+est store e_birth0
+
+xtreg female_earn_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins, dydx(duration_pos3) at(birth_interact==1) post
+est store e_birth1
+
+coefplot (e_birth0, recast(line) lwidth(medthick) lcolor(pink) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30)) label("No Post-Marital Birth")) ///
+		(e_birth1, recast(line) lwidth(medthick) lcolor(sand) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(sand)) label("Had Post-Marital Birth")) ///
+		, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) xline(5, lpattern(solid))  	///
+		ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"		///
+		12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  					///  
+		xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+		ytitle("Change in Women's Earnings %", size(medlarge)) legend(position(bottom) rows(1))
+
+// OH - instead of interacting, do I estimate seaprately?? (with the time invariant??)
+xtreg female_earn_pct_t ib5.duration_pos3 $controls if birth_after_trans==0, fe // ref group is time 0
+est store e_birth0_alt
+
+xtreg female_earn_pct_t ib5.duration_pos3 $controls if birth_after_trans==1, fe // ref group is time 0
+est store e_birth1_alt
+
+coefplot (e_birth0_alt, recast(line) lwidth(medthick) lcolor(pink) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30)) label("No Post-Marital Birth")) ///
+		(e_birth1_alt, recast(line) lwidth(medthick) lcolor(sand) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(sand)) label("Had Post-Marital Birth")) ///
+		, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) xline(5, lpattern(solid))  	///
+		ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"		///
+		12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  					///  
+		xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+		ytitle("Change in Women's Earnings %", size(medlarge)) legend(position(bottom) rows(1))
+
+// Children in HH - can't do children ever because it has to vary with time (because fixed effects)
+xtreg female_earn_pct_t ib5.duration_pos3##i.children $controls, fe // ref group is time 0
+margins, dydx(duration_pos3) at(children==0) post
+est store e_kid0
+
+xtreg female_earn_pct_t ib5.duration_pos3##i.children $controls, fe // ref group is time 0
+margins, dydx(duration_pos3) at(children==1) post
+est store e_kid1
+
+coefplot (e_kid0, recast(line) lwidth(medthick) lcolor(pink) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30)) label("No Children in HH")) ///
+		(e_kid1, recast(line) lwidth(medthick) lcolor(sand) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(sand)) label("Children in HH")) ///
+		, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) xline(5, lpattern(solid))  	///
+		ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"		///
+		12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  					///  
+		xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+		ytitle("Change in Women's Earnings %", size(medlarge)) legend(position(bottom) rows(1))
+		
+
+** Paid Work Hours
+xtreg female_hours_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins duration_pos3#birth_interact
+marginsplot
+
+xtreg female_hours_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins, dydx(duration_pos3) at(birth_interact==0) post
+est store h_birth0
+
+xtreg female_hours_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins, dydx(duration_pos3) at(birth_interact==1) post
+est store h_birth1
+
+coefplot (h_birth0, recast(line) lwidth(medthick) lcolor(pink) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30)) label("No Post-Marital Birth")) ///
+		(h_birth1, recast(line) lwidth(medthick) lcolor(sand) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(sand)) label("Had Post-Marital Birth")) ///
+		, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) xline(5, lpattern(solid))  	///
+		ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"		///
+		12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  					///  
+		xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+		ytitle("Change in Women's Paid Work Hrs %", size(medlarge)) legend(position(bottom) rows(1))
+		
+** Paid Work Hours
+xtreg wife_housework_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins duration_pos3#birth_interact
+marginsplot
+
+xtreg wife_housework_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins, dydx(duration_pos3) at(birth_interact==0) post
+est store hw_birth0
+
+xtreg wife_housework_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
+margins, dydx(duration_pos3) at(birth_interact==1) post
+est store hw_birth1
+
+coefplot (hw_birth0, recast(line) lwidth(medthick) lcolor(pink) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30)) label("No Post-Marital Birth")) ///
+		(hw_birth1, recast(line) lwidth(medthick) lcolor(sand) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(sand)) label("Had Post-Marital Birth")) ///
+		, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) xline(5, lpattern(solid))  	///
+		ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
+		4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
+		8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"		///
+		12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  					///  
+		xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
+		ytitle("Change in Women's Housework Hrs %", size(medlarge)) legend(position(bottom) rows(1))
 
 ************************************
 * Old analyses

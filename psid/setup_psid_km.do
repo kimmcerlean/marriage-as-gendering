@@ -37,3 +37,4 @@ ssc install psmatch2, replace
 ssc install xtfeis, replace
 
 set seed 8675309
+set scheme cleanplots
