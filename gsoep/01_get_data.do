@@ -363,6 +363,30 @@ tab lb0287_h, m // year of first birth - also so many -5
 tab lb0312_h, m // beginning of marriage 1 - also so many -5
 
 ********************************************************************************
+* Fertility history files
+********************************************************************************
+// for births AFTER marriage (or - births relative to marriage)
+use "$GSOEP/biobirth.dta", clear
+label language EN
+
+unique pid // 158946, 158946 -- so this is one record per PID so more of 1:1 lookup
+
+gen any_births=0
+replace any_births = 1 if sumkids > 0 & sumkids<100
+tab sumkids any_births, m 
+
+tab kidgeb01 any_births, m
+
+gen first_birth_year = kidgeb01
+replace first_birth_year=9999 if kidgeb01 < 0
+
+tab first_birth_year any_births, m
+
+keep pid sumkids kidgeb01 kidmon01 any_births first_birth_year
+
+save "$temp/biobirth_cleaned.dta", replace
+
+********************************************************************************
 * Other files
 ********************************************************************************
 // household file
@@ -390,6 +414,8 @@ save "$temp/hl_cleaned.dta", replace
 ********************************************************************************
 **# * Attempt to at merge all key individual characteristics
 ********************************************************************************
+// note may 2025: need to merge on birth history (see below)
+
 // first just merge basic individual characteristics
 use "$temp/pl_cleaned.dta", clear
 
@@ -398,6 +424,11 @@ drop if _merge==2
 drop _merge
 
 merge 1:1 pid hid cid syear using "$temp/ppathl_cleaned.dta"
+drop if _merge==2
+drop _merge
+
+// not yet added:
+merge 1:1 pid using "$temp/biobirth_cleaned.dta"
 drop if _merge==2
 drop _merge
 

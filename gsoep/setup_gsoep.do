@@ -26,3 +26,5 @@ global temp "$homedir/projects/Marriage as Gendering/temp data/gsoep"
 global results "$homedir/projects/Marriage as Gendering/results/gsoep"
 
 cd "$code"
+
+set scheme cleanplots
