@@ -1060,7 +1060,7 @@ coefplot (h_birth0, recast(line) lwidth(medthick) lcolor(pink) ciopts(recast(rli
 		xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
 		ytitle("Change in Women's Paid Work Hrs %", size(medlarge)) legend(position(bottom) rows(1))
 		
-** Paid Work Hours
+** Housework Hours
 xtreg wife_housework_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
 margins duration_pos3#birth_interact
 marginsplot
