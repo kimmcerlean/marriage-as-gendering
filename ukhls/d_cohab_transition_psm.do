@@ -545,12 +545,12 @@ marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4"
 
 mixed female_hours_pct_t treated##i.duration_pos || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
 margins, at(duration_pos=(1(1)9) treated=(0 1)) // so is this how I graph the curve
-marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Paid Work Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5", labsize(vsmall)) xtitle(`"Duration from Marital Transition"', size(small)) ytitle("Women's % of Total Paid Work Hours", size(small)) legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned") size(vsmall)) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink)) ylabel(0.3(0.05)0.55, labsize(vsmall)) xsize(4)  
 
 
 mixed female_housework_pct_t treated##i.duration_pos || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
 margins, at(duration_pos=(1(1)9) treated=(0 1)) // so is this how I graph the curve
-marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hours") legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5", labsize(vsmall)) xtitle(`"Duration from Marital Transition"', size(small)) ytitle("Women's % of Total Housework Hours", size(small)) legend(rows(1) position(bottom) order(1 "Cohab" 2 "Transitioned")  size(vsmall)) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot2opts(lcolor(pink) mcolor(pink)) ci2opts(lcolor(pink)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink)) ylabel(0.6(0.05)0.75, labsize(vsmall)) xsize(4)  
 
 // Attempting to add parenthood
 
@@ -582,11 +582,12 @@ marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4"
 
 mixed female_hours_pct_t treated##i.duration_pos##i.birth_adj || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
 margins, at(duration_pos=(1(1)9) treated=(0 1) birth_adj=(0 1))
-marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Paid Work Hrs") legend(rows(1) position(bottom) order(1 "Cohab" 3 "CF Married" 4 "Child Married")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot3opts(lcolor(pink) mcolor(pink)) ci3opts(lcolor(pink)) plot4opts(lcolor(pink%30) mcolor(pink%30)) ci4opts(lcolor(pink%30)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5", labsize(vsmall)) xtitle(`"Duration from Marital Transition"', size(small)) ytitle("Women's % of Total Paid Work Hrs", size(small)) legend(rows(1) position(bottom) order(1 "Cohab" 3 "CF Married" 4 "Child Married") size(vsmall)) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot3opts(lcolor(pink) mcolor(pink)) ci3opts(lcolor(pink)) plot4opts(lcolor(pink%30) mcolor(pink%30)) ci4opts(lcolor(pink%30)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink)) ylabel(0.2(0.05)0.55, labsize(vsmall)) xsize(4) 
 
 mixed female_housework_pct_t treated##i.duration_pos##i.birth_adj || couple_id: duration_pos // constant == baseline. coefficient = change from baseline
 margins, at(duration_pos=(1(1)9) treated=(0 1) birth_adj=(0 1))
-marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5") xtitle(`"Duration from Marital Transition"') ytitle("Women's % of Total Housework Hrs") legend(rows(1) position(bottom) order(1 "Cohab" 3 "CF Married" 4 "Child Married")) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot3opts(lcolor(pink) mcolor(pink)) ci3opts(lcolor(pink)) plot4opts(lcolor(pink%30) mcolor(pink%30)) ci4opts(lcolor(pink%30)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  
+marginsplot, xlabel( 1 "-3" 2 "-2" 3 "-1" 4 "Transition" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5", labsize(vsmall)) xtitle(`"Duration from Marital Transition"', size(small)) ytitle("Women's % of Total Housework Hrs", size(small)) legend(rows(1) position(bottom) order(1 "Cohab" 3 "CF Married" 4 "Child Married") size(vsmall)) title("") plot1opts(lcolor(gs8) mcolor(gs8)) ci1opts(lcolor(gs8)) plot3opts(lcolor(pink) mcolor(pink)) ci3opts(lcolor(pink)) plot4opts(lcolor(pink%30) mcolor(pink%30)) ci4opts(lcolor(pink%30)) xline(4, lpattern(dash) lwidth(thin) lcolor(pink))  ylabel(0.5(0.05)0.80, labsize(vsmall)) xsize(4)  
+ 
 
 
 /* This was initial really crude attempt

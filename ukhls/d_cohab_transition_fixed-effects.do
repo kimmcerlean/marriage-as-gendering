@@ -627,9 +627,17 @@ coefplot 	(hw0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(
 			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.01(.01).11) // xlabel(-.01(.01).06) // ysize(3) 
 */
 
-************************************
-* Working through impact functions
-************************************
+********************************************************************************
+********************************************************************************
+********************************************************************************
+**# Working through impact functions
+********************************************************************************
+********************************************************************************
+********************************************************************************
+
+// with both controls AND control group
+global controls  "educ_r1 educ_r2 educ_r3 educ_r4 educ_r5 educ_sp1 educ_sp2 educ_sp3 educ_sp4 educ_sp5 age_all age_all_sp couple_earnings_t nchild_dv home_owner" 
+
 // okay, looking at the Happiness 3 replicate code, I see now. Duration only starts ONCE married
 gen duration_married = 0
 replace duration_married = duration_cohab + 1 if married==1
@@ -715,39 +723,39 @@ xtreg female_earn_pct_t ib5.duration_pos3 $controls, fe // ref group is time 0
 
 coefplot, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) recast(line) lwidth(medthick) lcolor(pink)  ///
           xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30))   	/// 
-		  ylabel(-.2(.1).2, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  ylabel(-.3(.1).3, grid angle(0) labsize(small) format(%3.1f))        					///
 		  coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
 		  4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
 		  8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"			///
 		  12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  						///  
-          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
-          ytitle("Change in Women's Earnings %", size(medlarge)) 
+          xtitle("Years since marriage", size(med) margin(0 0 0 2))        					///
+          ytitle("Change in Women's Earnings %", size(med))  xsize(4)
 		  	  
 ** Paid Work Hours
 xtreg female_hours_pct_t ib5.duration_pos3 $controls, fe // ref group is time 0
 
 coefplot, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) recast(line) lwidth(medthick) lcolor(pink) ///
           xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30))   	/// 
-		  ylabel(-.2(.1).2, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  ylabel(-.3(.1).3, grid angle(0) labsize(small) format(%3.1f))        					///
 		  coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
 		  4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
 		  8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"			///
 		  12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  						///  
-          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
-          ytitle("Change in Women's Paid Work Hrs %", size(medlarge)) 
+          xtitle("Years since marriage", size(med) margin(0 0 0 2))        					///
+          ytitle("Change in Women's Paid Work Hrs %", size(med))  xsize(4)
 		  	  
 ** Housework
 xtreg female_housework_pct_t ib5.duration_pos3 $controls, fe // ref group is time 0
 
 coefplot, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) recast(line) lwidth(medthick) lcolor(pink)  ///
           xline(5, lpatter(solid)) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30))   	/// 
-		  ylabel(-.2(.1).2, grid angle(0) labsize(medium) format(%3.1f))        					///
+		  ylabel(-.3(.1).3, grid angle(0) labsize(small) format(%3.1f))        					///
 		  coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
 		  4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
 		  8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"			///
 		  12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  						///  
-          xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
-          ytitle("Change in Women's Housework Hrs %", size(medlarge)) 
+          xtitle("Years since marriage", size(med) margin(0 0 0 2))        					///
+          ytitle("Change in Women's Housework Hrs %", size(med)) xsize(4)
 		  
 // Can I interact with having a birth? (AFTER marriage)
 browse pidp partner_id int_year rel_start_all rel_end_all duration_pos3 year_transitioned year_first_birth age_youngest_child xw_anychild_dv nkids_dv nchild_dv
@@ -841,13 +849,13 @@ est store h_birth1
 coefplot (h_birth0, recast(line) lwidth(medthick) lcolor(pink) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30)) label("No Post-Marital Birth")) ///
 		(h_birth1, recast(line) lwidth(medthick) lcolor(sand) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(sand)) label("Had Post-Marital Birth")) ///
 		, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) xline(5, lpattern(solid))  	///
-		ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		ylabel(-.3(.1).3, grid angle(0) labsize(small) format(%3.1f))        					///
 		coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
 		4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
 		8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"		///
 		12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  					///  
-		xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
-		ytitle("Change in Women's Paid Work Hrs %", size(medlarge)) legend(position(bottom) rows(1))
+		xtitle("Years since marriage", size(med) margin(0 0 0 2)) xsize(4)     					///
+		ytitle("Change in Women's Paid Work Hrs %", size(med)) legend(position(bottom) rows(1))
 		
 ** Housework Hours
 xtreg female_housework_pct_t ib5.duration_pos3##i.birth_interact $controls, fe // ref group is time 0
@@ -865,13 +873,13 @@ est store hw_birth1
 coefplot (hw_birth0, recast(line) lwidth(medthick) lcolor(pink) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(pink%30)) label("No Post-Marital Birth")) ///
 		(hw_birth1, recast(line) lwidth(medthick) lcolor(sand) ciopts(recast(rline) lpattern(dash) lwidth(thin) lcolor(sand)) label("Had Post-Marital Birth")) ///
 		, keep(*.duration_pos3) vertical yline(0, lpattern(solid)) xline(5, lpattern(solid))  	///
-		ylabel(-.3(.1).3, grid angle(0) labsize(medium) format(%3.1f))        					///
+		ylabel(-.3(.1).3, grid angle(0) labsize(small) format(%3.1f))        					///
 		coeflabels(1.duration_pos3="-5" 2.duration_pos3="-4" 3.duration_pos3="-3" 				///
 		4.duration_pos3="-2" 5.duration_pos3="-1" 6.duration_pos3="0" 7.duration_pos3="1" 		///
 		8.duration_pos3="2" 9.duration_pos3="3" 10.duration_pos3="4" 11.duration_pos3="5"		///
 		12.duration_pos3="6" 13.duration_pos3="7" 14.duration_pos3="8") 	  					///  
-		xtitle("Years since marriage", size(medlarge) margin(0 0 0 2))        					///
-		ytitle("Change in Women's Housework Hrs %", size(medlarge)) legend(position(bottom) rows(1))
+		xtitle("Years since marriage", size(med) margin(0 0 0 2))   xsize(4)   					///
+		ytitle("Change in Women's Housework Hrs %", size(med)) legend(position(bottom) rows(1))
 
 
 ************************************
