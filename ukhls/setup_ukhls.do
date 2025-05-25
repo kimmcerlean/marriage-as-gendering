@@ -1,3 +1,4 @@
+clear all
 set maxvar 10000
 
 // to get your hostname to add your own macros to file, type: display "`c(hostname)'"

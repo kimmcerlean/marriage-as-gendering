@@ -130,6 +130,17 @@ replace transition_flag=0 if ever_transition==1 & rel_start_yr > year_transition
 
 tab ever_transition transition_flag, m
 
+* so first need a var that is pre v. post treated. can I just use marital status?
+//tab marital_status_updated treated, m
+//tab year_transitioned treated, m
+//tab marital_status_updated if treated==1 & survey_yr >= year_transitioned
+
+//sort unique_id partner_id survey_yr
+//browse unique_id partner_id survey_yr marital_status_updated treated marr_trans year_transitioned // so treated transition_flag and ever_transition are the same thing at this point
+
+gen married = 0
+replace married = 1 if marital_status_updated==1
+
 ********************************************************************************
 * before dropping, get descriptive comparison of cohabitors to married couples
 ********************************************************************************
@@ -146,9 +157,20 @@ unique unique_id partner_id if marital_status_updated==2
 // % ever transition
 tab marital_status_updated ever_transition, row
 tab ever_transition if transition_flag==1 | always_cohab==1
+unique unique_id partner_id if marital_status_updated==2, by(ever_transition) // this probably most accurate
 
 // some small descriptives
 tabstat AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 couple_educ_gp home_owner children, by(marital_status_updated)
+
+// and these to use in models
+regress female_earn_pct_t married
+est store e0
+
+regress female_hours_pct_t married
+est store h0
+
+regress wife_housework_pct_t married
+est store hw0
 
 ********************************************************************************
 **# okay make analytical sample and recode duration relative to marital transition
@@ -209,8 +231,6 @@ unique unique_id year_transitioned
 unique unique_id rel_start_yr
 unique unique_id if dur==0
 
-unique unique_id partner_id, by(treated)
-
 sum duration_cohab if dur < 0 // average cohab duration
 sum duration_cohab if dur > 0 & dur !=. // average marital duration
 
@@ -220,6 +240,9 @@ tab treated educ_type if relationship_duration==0, row
 
 tab raceth_head_fixed treated, col
 
+// for workshop
+unique unique_id partner_id, by(treated)
+tab treated
 tabstat AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 couple_educ_gp home_owner children, by(treated)
 
 tab treated children, row
@@ -291,17 +314,6 @@ rows(2) position(6)) xscale(range(-5 8)) xlabel(-5(1)8)  xline(0)
 restore
 
 // preliminary models
-* so first need a var that is pre v. post treated. can I just use marital status?
-tab marital_status_updated treated, m
-tab year_transitioned treated, m
-tab marital_status_updated if treated==1 & survey_yr >= year_transitioned
-
-sort unique_id partner_id survey_yr
-browse unique_id partner_id survey_yr marital_status_updated treated marr_trans year_transitioned // so treated transition_flag and ever_transition are the same thing at this point
-
-gen married = 0
-replace married = 1 if marital_status_updated==1
-
 tabstat female_earn_pct_t female_hours_pct_t wife_housework_pct_t, by(married) // without controls, this is what I'd be estimating? yes
 regress female_earn_pct_t i.married
 regress female_earn_pct_t i.married if treated==1
@@ -665,6 +677,8 @@ xtart, keep(married) // so this one is significant
 global controls "i.educ_head_est i.educ_wife_est AGE_HEAD_ AGE_WIFE_ couple_earnings_t1 home_owner NUM_CHILDREN_ rel_start_yr" // i.raceth_head_fixed i.raceth_wife_fixed  - not time varying
 
 ** Earnings
+regress female_earn_pct_t married
+est store e
 regress female_earn_pct_t married $controls
 est store e_b
 xtreg female_earn_pct_t married $controls, fe
@@ -673,6 +687,8 @@ xtfeis female_earn_pct_t married $controls, slope(relationship_duration) cluster
 est store e_feis
 
 ** Paid Work Hours
+regress female_hours_pct_t married
+est store h
 regress female_hours_pct_t married $controls
 est store h_b
 xtreg female_hours_pct_t married $controls, fe
@@ -681,6 +697,8 @@ xtfeis female_hours_pct_t married $controls, slope(relationship_duration) cluste
 est store h_feis
 
 ** Housework
+regress wife_housework_pct_t married
+est store hw
 regress wife_housework_pct_t married $controls
 est store hw_b
 xtreg wife_housework_pct_t married $controls, fe
@@ -703,7 +721,43 @@ coefplot 	(h_b, label("OLS") lcolor("gs8") mcolor("gs8") ciopts(color("gs8"))) /
 			, keep(married)  byopts(rows(1)) xsize(7) ysize(3) xline(0, lcolor(black) lstyle(solid)) levels(90) ///
 			base coeflabels(married = "") xtitle(Change in Women's Share, size(small)) legend(rows(1)) ylabel(none)
 
+// paid work
+coefplot 	(h0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(color("black"))) ///
+			(h_b, label("OLS") lcolor("gs8") mcolor("gs8") ciopts(color("gs8"))) ///
+			(h_fe,label("FE") lcolor("pink") mcolor("pink") ciopts(color("pink"))) ///
+			(h_feis,label("FEIS") lcolor("pink%30") mcolor("pink%30") ciopts(color("pink%30"))), ///
+			keep(married)  byopts(rows(1)) xsize(3.5) xline(0, lcolor(gs4) lwidth(thin) lpattern(dash)) ///
+			base coeflabels(married = "")  levels(95) xtitle(Change in Women's Paid Work Share, size(small)) ///
+			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.11(.01).01) // xlabel(-.045(.005).005) // ysize(3) 
 			
+// housework			
+coefplot 	(hw0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(color("black"))) ///
+			(hw_b, label("OLS") lcolor("gs8") mcolor("gs8") ciopts(color("gs8"))) ///
+			(hw_fe,label("FE") lcolor("pink") mcolor("pink") ciopts(color("pink"))) ///
+			(hw_feis,label("FEIS") lcolor("pink%30") mcolor("pink%30") ciopts(color("pink%30"))), ///
+			keep(married)  byopts(rows(1)) xsize(3.5) xline(0, lcolor(gs4) lwidth(thin) lpattern(dash)) ///
+			base coeflabels(married = "")  levels(95) xtitle(Change in Women's Housework Share, size(small)) ///
+			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.01(.01).11) // xlabel(-.015(.005).03) // ysize(3) 
+
+/*
+// paid work
+coefplot 	(h0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(color("black"))) ///
+			(h_b, label("OLS") lcolor("white") mcolor("white") ciopts(color("white"))) ///
+			(h_fe,label("FE") lcolor("white") mcolor("white") ciopts(color("white"))) ///
+			(h_feis,label("FEIS") lcolor("white") mcolor("white") ciopts(color("white"))), ///
+			keep(married)  byopts(rows(1)) xsize(3.5) xline(0, lcolor(gs4) lwidth(thin) lpattern(dash)) ///
+			base coeflabels(married = "")  levels(95) xtitle(Change in Women's Paid Work Share, size(small)) ///
+			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.11(.01).01) // xlabel(-.06(.01).01) // ysize(3) 
+			
+// housework			
+coefplot 	(hw0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(color("black"))) ///
+			(hw_b, label("OLS") lcolor("white") mcolor("white") ciopts(color("white"))) ///
+			(hw_fe,label("FE") lcolor("white") mcolor("white") ciopts(color("white"))) ///
+			(hw_feis,label("FEIS") lcolor("white") mcolor("white") ciopts(color("white"))), ///
+			keep(married)  byopts(rows(1)) xsize(3.5) xline(0, lcolor(gs4) lwidth(thin) lpattern(dash)) ///
+			base coeflabels(married = "")  levels(95) xtitle(Change in Women's Housework Share, size(small)) ///
+			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.01(.01).11) // xlabel(-.01(.01).06) // ysize(3) 
+*/
 
 ************************************
 * What happens when I try xtfeis

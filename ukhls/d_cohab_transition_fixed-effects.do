@@ -114,6 +114,11 @@ replace age_woman = age_all_sp if sex==1
 gen age_man = age_all if sex==1
 replace age_man = age_all_sp if sex==2
 
+* so first need a var that is pre v. post treated. can I just use marital status?
+gen married = 0
+replace married = 1 if marital_status_defacto==1
+
+
 ********************************************************************************
 * before dropping, get descriptive comparison of cohabitors to married couples
 ********************************************************************************
@@ -128,9 +133,20 @@ unique pidp partner_id if marital_status_defacto==2
 
 // % ever transition
 tab marital_status_defacto ever_transition, row
+unique pidp partner_id if marital_status_defacto==2, by(ever_transition) // this probably most accurate
 
 // some small descriptives
 tabstat age_woman age_man couple_earnings_t couple_educ_gp home_owner kids_in_hh, by(marital_status_defacto)
+
+// and these to use in models
+regress female_earn_pct_t married
+est store e0
+
+regress female_hours_pct_t married
+est store h0
+
+regress female_housework_pct_t married
+est store hw0
 
 ********************************************************************************
 **# okay make analytical sample and recode duration relative to marital transition
@@ -205,7 +221,9 @@ unique pidp partner_id, by(treated)
 unique pidp partner_id if treated==0
 unique pidp partner_id if treated==1
 
-// some small descriptives
+// some small descriptives (for workshop)
+unique pidp partner_id, by(treated)
+tab treated
 tabstat age_woman age_man couple_earnings_t couple_educ_gp home_owner kids_in_hh, by(treated)
 
 // tab had_birth
@@ -313,8 +331,8 @@ tab year_transitioned treated, m
 tab marital_status_defacto if treated==1 & int_year >= year_transitioned
 tab marital_status_defacto if treated==1 & int_year < year_transitioned
 
-gen married = 0
-replace married = 1 if marital_status_defacto==1
+// gen married = 0
+// replace married = 1 if marital_status_defacto==1
 
 // other prep steps
 tab duration_cohab treated, m
@@ -571,6 +589,43 @@ coefplot 	(h_b, label("OLS") lcolor("gs8") mcolor("gs8") ciopts(color("gs8"))) /
 			(hw_b, label("OLS")) (hw_fe,label("FE")) (hw_feis,label("FEIS")), bylabel("Housework") || ///
 			, keep(married)  byopts(rows(1)) xsize(7) ysize(3) xline(0, lcolor(black) lstyle(solid)) levels(90) ///
 			base coeflabels(married = "") xtitle(Change in Women's Share, size(small)) legend(position(bottom) rows(1)) ylabel(none)
+
+// paid work
+coefplot 	(h0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(color("black"))) ///
+			(h_b, label("OLS") lcolor("gs8") mcolor("gs8") ciopts(color("gs8"))) ///
+			(h_fe,label("FE") lcolor("pink") mcolor("pink") ciopts(color("pink"))) ///
+			(h_feis,label("FEIS") lcolor("pink%30") mcolor("pink%30") ciopts(color("pink%30"))), ///
+			keep(married)  byopts(rows(1)) xsize(3.5) xline(0, lcolor(gs4) lwidth(thin) lpattern(dash)) ///
+			base coeflabels(married = "")  levels(95) xtitle(Change in Women's Paid Work Share, size(small)) ///
+			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.11(.01).01) // xlabel(-.06(.01).01) // ysize(3) 
+			
+// housework			
+coefplot 	(hw0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(color("black"))) ///
+			(hw_b, label("OLS") lcolor("gs8") mcolor("gs8") ciopts(color("gs8"))) ///
+			(hw_fe,label("FE") lcolor("pink") mcolor("pink") ciopts(color("pink"))) ///
+			(hw_feis,label("FEIS") lcolor("pink%30") mcolor("pink%30") ciopts(color("pink%30"))), ///
+			keep(married)  byopts(rows(1)) xsize(3.5) xline(0, lcolor(gs4) lwidth(thin) lpattern(dash)) ///
+			base coeflabels(married = "")  levels(95) xtitle(Change in Women's Housework Share, size(small)) ///
+			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.01(.01).11) // xlabel(-.01(.01).06) // ysize(3) 
+/*
+// paid work
+coefplot 	(h0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(color("black"))) ///
+			(h_b, label("OLS") lcolor("white") mcolor("white") ciopts(color("white"))) ///
+			(h_fe,label("FE") lcolor("white") mcolor("white") ciopts(color("white"))) ///
+			(h_feis,label("FEIS") lcolor("white") mcolor("white") ciopts(color("white"))), ///
+			keep(married)  byopts(rows(1)) xsize(3.5) xline(0, lcolor(gs4) lwidth(thin) lpattern(dash)) ///
+			base coeflabels(married = "")  levels(95) xtitle(Change in Women's Paid Work Share, size(small)) ///
+			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.11(.01).01) // xlabel(-.06(.01).01) // ysize(3) 
+			
+// housework			
+coefplot 	(hw0, label("cross-sectional") lcolor("black") mcolor("black") ciopts(color("black"))) ///
+			(hw_b, label("OLS") lcolor("white") mcolor("white") ciopts(color("white"))) ///
+			(hw_fe,label("FE") lcolor("white") mcolor("white") ciopts(color("white"))) ///
+			(hw_feis,label("FEIS") lcolor("white") mcolor("white") ciopts(color("white"))), ///
+			keep(married)  byopts(rows(1)) xsize(3.5) xline(0, lcolor(gs4) lwidth(thin) lpattern(dash)) ///
+			base coeflabels(married = "")  levels(95) xtitle(Change in Women's Housework Share, size(small)) ///
+			legend(position(bottom) rows(1)) ylabel(none) xlabel(-.01(.01).11) // xlabel(-.01(.01).06) // ysize(3) 
+*/
 
 ************************************
 * Working through impact functions
