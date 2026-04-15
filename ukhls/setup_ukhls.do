@@ -15,7 +15,7 @@ if `"`c(hostname)'"' == "60018D" global code "\\bfsrv2\home$\kmcerlea\PersonalDa
 // if `"`c(hostname)'"' == "{hostname}" global code
 
 * This locations of folders containing the original data files
-global UKHLS "$homedir/datasets/UKHLS/UKDA-6614-stata/stata/stata13_se"
+global UKHLS "$homedir/datasets/UKHLS/UKDA-6614-stata/stata/stata14_se"
 global UKHLS_mh "$homedir/datasets/UKHLS/UKDA-8473-stata/stata"
 
 * created data files
