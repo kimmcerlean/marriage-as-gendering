@@ -717,7 +717,7 @@ mi impute chained
 ;
 #delimit cr
 
-save "$created_data/ukhls_individs_imputed_wide_test.dta", replace // might be helpful to save imputed one to have as reference also (to play around with data? is THIS the move actually - use test data instead of non-imputed data to figure out methods??)
+save "$created_data/ukhls_individs_imputed_wide_testmi1.dta", replace // might be helpful to save imputed one to have as reference also (to play around with data? is THIS the move actually - use test data instead of non-imputed data to figure out methods??)
 
 // save "$created_data/ukhls_individs_imputed_wide", replace // all 10 imputations
 
@@ -725,13 +725,13 @@ save "$created_data/ukhls_individs_imputed_wide_test.dta", replace // might be h
 **# Reshape back to long to look at descriptives
 ********************************************************************************
 
-mi reshape long total_hours work_hours jbhrs jshrs howlng any_aid aidhrs aid_hours employed employment_status jbstat fimnlabgrs_dv current_parent_status nkids_dv age_youngest_child partnered_imp marital_status_imp npens_dv num_parents_hh fihhmngrs_dv gor_dv orig_record hiqual_dv nchild_dv partnered marital_status_defacto country_all age_all current_rel_start_year current_rel_end_year ivfio sampst hidp psu strata int_year year aidhh aidxhh husits hubuys hufrys huiron humops huboss tenure_dv housing_status_alt master_religion religion_est disabled_est sr_health respondent_info ///
+mi reshape long total_hours work_hours jbhrs jshrs howlng any_aid aidhrs aid_hours employed employment_status jbstat fimnlabgrs_dv current_parent_status nkids_dv age_youngest_child partnered_imp marital_status_imp npens_dv npn_dv hhsize fihhmngrs_dv gor_dv urban_dv orig_record hiqual_dv nchild_dv partnered marital_status_defacto country_all age_all current_rel_start_year current_rel_end_year ivfio sampst hidp psu strata int_year year aidhh aidxhh husits hubuys hufrys huiron humops huboss tenure_dv housing_status_alt master_religion religion_est empstat_disabled empstat_retired disabled_est sr_health life_satisfaction respondent_info respondent_self current_divorce_status eligible_couple marr_trans ///
 , i(couple_id pidp eligible_partner eligible_rel_start_year eligible_rel_end_year eligible_rel_status xw_sex) ///
  j(duration)
  
 mi convert flong
 
-browse couple_id pidp eligible_partner duration total_hours howlng _mi_miss _mi_m _mi_id
+browse couple_id pidp eligible_partner duration marital_status_imp total_hours howlng hufrys _mi_miss _mi_m _mi_id
 
 gen imputed=0
 replace imputed=1 if inrange(_mi_m,1,10)
@@ -744,30 +744,55 @@ inspect howlng if imputed==1
 
 mi update
 
-save "$created_data/ukhls_individs_imputed_long_bysex", replace
+save "$created_data/ukhls_individs_imputed_long_testmi1.dta", replace // for test
+// save "$created_data/ukhls_individs_imputed_long.dta", replace // for all 10 imputations / burn-ins
 
 // use "$created_data/ukhls_individs_imputed_long_bysex", clear
 // explore congruence between imputed and not
-tabstat total_hours work_hours howlng, by(imputed) stats(mean sd p50)
-tabstat total_hours work_hours howlng if xw_sex==1, by(imputed) stats(mean sd p50)
-tabstat total_hours work_hours howlng if xw_sex==2, by(imputed) stats(mean sd p50)
+tabstat total_hours howlng, by(imputed) stats(mean sd p50)
+tabstat total_hours howlng if xw_sex==1, by(imputed) stats(mean sd p50)
+tabstat total_hours howlng if xw_sex==2, by(imputed) stats(mean sd p50)
 
-tabstat total_hours work_hours howlng aid_hours employment_status fimnlabgrs_dv nkids_dv age_youngest_child partnered_imp marital_status_imp npens_dv num_parents_hh fihhmngrs_dv gor_dv tenure_dv master_religion disabled_est sr_health  father_educ mother_educ father_empstatus mother_empstatus family_structure year_first_birth_imp birth_timing_rel, by(imputed) stats(mean sd p50) columns(statistics) 
+tabstat total_hours howlng aid_hours employment_status fimnlabgrs_dv hubuys hufrys huiron humops huboss husits nkids_dv marital_status_imp npens_dv npn_dv hhsize fihhmngrs_dv gor_dv urban_dv tenure_dv master_religion disabled_est sr_health life_satisfaction age_youngest_child year_first_birth_imp hiqual_fixed xw_ethn_dv xw_ukborn father_educ mother_educ father_empstatus mother_empstatus family_structure ever_parent, by(imputed) stats(mean sd p50) columns(statistics) // any_aid work_hours jbstat
 
 tab employment_status imputed, col
 tab aid_hours imputed, col
+tab hubuys imputed, col // okay right so less zeroes in imputed because more partnered, so need to compare non-zeros
+tab hufrys imputed, col
+tab huiron imputed, col
+tab humops imputed, col
+tab huboss imputed, col
+tab husits imputed, col
+tab hubuys imputed if inlist(marital_status_imp,1,2), col // okay right so less zeroes in imputed because more partnered, so need to compare non-zeros
+tab hufrys imputed if inlist(marital_status_imp,1,2), col
+tab huiron imputed if inlist(marital_status_imp,1,2), col
+tab humops imputed if inlist(marital_status_imp,1,2), col
+tab huboss imputed if inlist(marital_status_imp,1,2), col
+tab husits imputed if inlist(marital_status_imp,1,2), col // this one might be wonky bc I think theoretically also conditional on having kids? 
 tab marital_status_imp imputed, col
+tab gor_dv imputed, col
+tab urban_dv imputed, col
 tab master_religion imputed, col
 tab tenure_dv imputed, col
 tab disabled_est imputed, col
 tab sr_health imputed, col
+tab life_satisfaction imputed, col
+tab ever_parent imputed, col
+tab hiqual_fixed imputed, col
+tab xw_ethn_dv imputed, col
+tab xw_ukborn imputed, col
 tab father_educ imputed, col
 tab mother_educ imputed, col
+tab father_empstatus imputed, col
+tab mother_empstatus imputed, col
 tab family_structure imputed, col
 
+// let's see if my conditionals worked
+tab hufrys marital_status_imp if imputed==1, m
+tab year_first_birth_imp ever_parent if imputed==1, m
+tab age_youngest_child nkids_dv if imputed==1, m
+
 twoway (histogram total_hours if imputed==0 & total_hours <=80, width(2) color(blue%30)) (histogram total_hours if imputed==1 & total_hours <=80, width(2) color(red%30)), legend(order(1 "Observed" 2 "Imputed") rows(1) position(6)) xtitle("Weekly Employment Hours")
-twoway (histogram work_hours if imputed==0 & work_hours <=80, width(2) color(blue%30)) (histogram work_hours if imputed==1 & work_hours <=80, width(2) color(red%30)), legend(order(1 "Observed" 2 "Imputed") rows(1) position(6)) xtitle("Weekly Employment Hours")
-// more zeroes for men than women
 twoway (histogram total_hours if imputed==0 & xw_sex==1 & total_hours <=80, width(2) color(blue%30)) (histogram total_hours if imputed==1 & xw_sex==1 & total_hours <=80, width(2) color(red%30)), legend(order(1 "Observed" 2 "Imputed") rows(1) position(6)) xtitle("Weekly Employment Hours")
 twoway (histogram total_hours if imputed==0 & xw_sex==2 & total_hours <=80, width(2) color(blue%30)) (histogram total_hours if imputed==1 & xw_sex==2 & total_hours <=80, width(2) color(red%30)), legend(order(1 "Observed" 2 "Imputed") rows(1) position(6)) xtitle("Weekly Employment Hours")
 
@@ -776,7 +801,7 @@ twoway (histogram howlng if imputed==0 & howlng<=50, width(2) color(blue%30)) (h
 
 preserve
 
-collapse (mean) total_hours work_hours jbhrs howlng, by(duration imputed)
+collapse (mean) total_hours howlng, by(duration imputed)
 
 twoway (line total_hours duration if imputed==0) (line total_hours duration if imputed==1), legend(order(1 "Observed" 2 "Imputed") rows(1) position(6)) ytitle("Weekly Employment Hours") title("Avg Employment Hours by Duration") xtitle("Marital Duration") //  yscale(range(30 40))
 
