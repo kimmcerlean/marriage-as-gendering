@@ -30,3 +30,25 @@ global results "$homedir/projects/Marriage as Gendering/results/ukhls"
 cd "$code"
 
 set scheme cleanplots
+
+/*
+Note on BHPS waves - as of UKHLS wave 15
+16 = BH1
+17 = 2
+18 = 3
+19 = 4
+20 = 5
+21 = 6
+22 = 7
+23 = 8
+24 = 9
+25 = 10
+26 = 11
+27 = 12
+28 = 13
+29 = 14
+30 = 15
+31 = 16
+32 = 17
+33 = 18
+*/

@@ -709,6 +709,13 @@ foreach var in hubuys hufrys huiron humops{ // coding changed starting wave 12 (
 	
 }
 
+foreach var in hubuys hufrys huiron humops{ 
+	fre `var'
+	replace `var' = 5 if `var'==97 // moving other to 5 so they are in order, think it's maybe weird to have 4 then 97...doing separate to above bc above does many other things
+	label define b_`var' 5 "other", add
+	fre `var'
+}
+
 tab huboss, m
 replace huboss=4 if huboss==97 // other was 4 in bhps but 97 in ukhls. i like the idea of having them in order (in case I impute)
 
@@ -1378,6 +1385,36 @@ tab employed missing_rel_start, row // quite evenly distributed
 tab age_all missing_rel_start, row
 // okay so it really is about the type of sample / interview, not really the people themselves. so I think fine to just leave as missing for now?
 
+// I think I want to create an indicator of divorce prior to this relationship?
+browse pidp int_year marital_status_defacto partner_id rel_no current_rel_start_year current_rel_end_year mh_starty1 mh_mrgend1 mh_endy1 mh_divorcey1 mh_starty2 mh_mrgend2 mh_endy2 mh_divorcey2 mh_starty3 mh_mrgend3 mh_endy3 mh_divorcey3
+
+tab mh_divorcey1 if mh_mrgend1 == 2, m
+tab mh_endy1 if mh_mrgend1 == 2, m
+tab mh_endy1 mh_divorcey1 if mh_mrgend1 == 2, m
+
+forvalues m=1/14{
+	gen mh_est_div_yr`m' = mh_endy`m' if mh_mrgend`m'==2
+	gen mh_div_yr`m'=.
+	replace mh_div_yr`m' = mh_divorcey`m' if mh_mrgend`m'==2 & mh_divorcey`m'!=-8
+	replace mh_div_yr`m' = mh_est_div_yr`m' if mh_mrgend`m'==2 & mh_divorcey`m'==-8
+	replace mh_div_yr`m' = . if mh_div_yr`m' == -9
+}
+
+browse pidp int_year marital_status_defacto partner_id rel_no current_rel_start_year current_rel_end_year mh_starty1 mh_mrgend1 mh_div_yr1 mh_est_div_yr1 mh_endy1 mh_divorcey1 mh_starty2 mh_mrgend2 mh_div_yr2 mh_est_div_yr2 mh_endy2 mh_divorcey2 mh_starty3 mh_div_yr3 mh_est_div_yr3 mh_mrgend3 mh_endy3 mh_divorcey3
+
+tab mh_div_yr1 if mh_mrgend1 == 2, m
+tab mh_div_yr2 if mh_mrgend2 == 2, m
+
+egen first_divorce_year = rowmin(mh_div_yr1 mh_div_yr2 mh_div_yr3 mh_div_yr4 mh_div_yr5 mh_div_yr6 mh_div_yr7 mh_div_yr8 mh_div_yr9 mh_div_yr10 mh_div_yr11 mh_div_yr12 mh_div_yr13 mh_div_yr14)
+
+browse pidp year current_rel_start_year first_divorce_year mh_div_yr* mh_mrgend* 
+
+// wait I am doing prior to rel start, is that right or should it be interview? beacuse some of these INTERVIEWS are after the divorce, but it's beacuse the relationship I am tracking is the one that caused the divorce. (because right now first divorce year is time invariant - so it can be after current rel start but before interview because i am watching that relationship unfold.) maybe I just leave like this for now, but I'll retain the first divorce year so I can have it for later to decide what I want to do with it.
+gen prior_divorce = .
+replace prior_divorce = 0 if in_partner_history==1 & first_divorce_year==.
+replace prior_divorce = 0 if first_divorce_year >  current_rel_start_year & first_divorce_year!=.
+replace prior_divorce = 1 if first_divorce_year < current_rel_start_year & current_rel_start_year!=.
+
 // final clean up of file before saving
 gen int_year = istrtdaty 
 replace int_year = year if istrtdaty < 0 // missing / dk, so not very helpful...
@@ -1387,8 +1424,11 @@ bysort pidp partner_id: egen ever_transition = max(marr_trans) if partnered==1
 gen year_transitioned = int_year if marr_trans==1 // note, year transition is first year marrriage. so years prior are cohab, then that year onward is marriage
 bysort pidp partner_id (year_transitioned): replace year_transitioned = year_transitioned[1]
 
+gen year_transitioned_wave = year if marr_trans==1  // version based on wave year - think I will need this later to avoid overlap
+bysort pidp partner_id (year_transitioned_wave): replace year_transitioned_wave = year_transitioned_wave[1]
+
 sort pidp year
-browse pidp partner_id int_year marital_status_defacto marr_trans ever_transition year_transitioned if partnered==1
+browse pidp partner_id year int_year marital_status_defacto marr_trans ever_transition year_transitioned year_transitioned_wave if partnered==1
 
 // some cohab dates missing so the above is messing things up for marriage to cohab (start date after rel start)
 bysort pidp partner_id: egen first_couple_year = min(int_year) if partnered==1
@@ -1443,7 +1483,7 @@ unique pidp partner_id // 137684
 unique pidp, by(xw_sex) // 57077 m,  62920 w
 unique pidp, by(partnered) // 60676 0, 74627 1
 unique pidp partner_id if partnered==1 & current_rel_start_year==. // 7264 couples
-unique pidp partner_id if partnered==1 & current_rel_end_year==. // 5742 couples // is missing end date less of a problem though?
+unique pidp partner_id if partnered==1 & current_rel_end_year==. // 5742 couples // is missing end date less of a problem though? oh wait I got confused - this is those WITH MISSING, so lower is better.
 
 /* wave 14 info
 unique pidp // 118405, 807942 total py
@@ -1451,6 +1491,6 @@ unique pidp partner_id // 135496
 unique pidp, by(xw_sex) // 56230 m, 62170 w
 unique pidp, by(partnered) // 59583 0, 73581 1
 unique pidp partner_id if partnered==1 & current_rel_start_year==. // 8124 couples. does that feel like too many to be missing? okay now 7066
-unique pidp partner_id if partnered==1 & current_rel_end_year==. //  8150 couples. does that feel like too many to be missing? okay now it is 5688. when did this change gah?!
+unique pidp partner_id if partnered==1 & current_rel_end_year==. //  8150 couples. does that feel like too many to be missing? okay now it is 5688. when did this change gah?! oh I am dumn this is MISSSING so it'd good it went down. above is the actual total of partnered, so this is a % of that.
 // unique pidp partner_id if partnered==1, by(current_rel_start_year)
 */
